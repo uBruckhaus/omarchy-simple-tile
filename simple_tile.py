@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+from contextlib import contextmanager
 import fcntl
 import json
 import os
 from pathlib import Path
 import re
+import stat
 import subprocess
 import sys
 import time
@@ -119,15 +121,81 @@ def move_expression(address, target, follow):
             (address, target, "true" if follow else "false"))
 
 
+def get_runtime_dir():
+    runtime = os.environ.get("XDG_RUNTIME_DIR")
+    if runtime:
+        runtime_path = Path(runtime)
+        try:
+            st = runtime_path.lstat()
+            if runtime_path.is_symlink():
+                raise RuntimeError(f"unsafe symlinked XDG_RUNTIME_DIR: {runtime_path}")
+            if not stat.S_ISDIR(st.st_mode):
+                raise RuntimeError(f"XDG_RUNTIME_DIR is not a directory: {runtime_path}")
+            if st.st_uid != os.getuid():
+                raise RuntimeError(f"XDG_RUNTIME_DIR not owned by current user: {runtime_path}")
+            if st.st_mode & 0o022 != 0:
+                raise RuntimeError(f"insecure permissions on XDG_RUNTIME_DIR: {runtime_path}")
+            return runtime_path
+        except FileNotFoundError:
+            pass
+
+    fallback = Path(f"/tmp/omarchy-simple-tile-{os.getuid()}")
+    try:
+        st = fallback.lstat()
+        if fallback.is_symlink():
+            raise RuntimeError(f"unsafe pre-existing symlinked runtime directory: {fallback}")
+        if not stat.S_ISDIR(st.st_mode):
+            raise RuntimeError(f"unsafe pre-existing runtime path is not a directory: {fallback}")
+        if st.st_uid != os.getuid():
+            raise RuntimeError(f"unsafe runtime directory ownership: {fallback}")
+        if st.st_mode & 0o077 != 0:
+            raise RuntimeError(f"unsafe runtime directory permissions: {fallback}")
+        return fallback
+    except FileNotFoundError:
+        fallback.mkdir(mode=0o700, exist_ok=False)
+        return fallback
+
+
+@contextmanager
+def runtime_lock():
+    runtime_dir = get_runtime_dir()
+    lock_path = runtime_dir / "omarchy-simple-tile.lock"
+
+    try:
+        st = lock_path.lstat()
+        if lock_path.is_symlink():
+            raise RuntimeError(f"unsafe pre-existing symlinked lock: {lock_path}")
+        if not stat.S_ISREG(st.st_mode):
+            raise RuntimeError(f"unsafe pre-existing lock is not a regular file: {lock_path}")
+        if st.st_uid != os.getuid():
+            raise RuntimeError(f"unsafe lock file ownership: {lock_path}")
+    except FileNotFoundError:
+        pass
+
+    flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(str(lock_path), flags, 0o600)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise RuntimeError(f"opened lock file descriptor is not a regular file: {lock_path}")
+        if st.st_uid != os.getuid():
+            raise RuntimeError(f"opened lock file descriptor not owned by current user: {lock_path}")
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            except OSError:
+                pass
+    finally:
+        os.close(fd)
+
+
 def handle_open(address, dry_run=False):
     # All bar instances share this lock. Re-query after acquiring it so
     # simultaneous windows and multi-monitor event delivery cannot overfill.
-    runtime = os.environ.get("XDG_RUNTIME_DIR")
-    if not runtime:
-        runtime = f"/tmp/omarchy-simple-tile-{os.getuid()}"
-        os.makedirs(runtime, mode=0o700, exist_ok=True)
-    with (Path(runtime) / "omarchy-simple-tile.lock").open("w") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+    with runtime_lock():
         for attempt in range(4):
             settings = read_settings()
             if not settings["enabled"]:

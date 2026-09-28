@@ -172,5 +172,66 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(sum(call.args[0] == "eval" for call in hypr.call_args_list), 1)
 
 
+class LockSecurityTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.runtime_dir = Path(self.directory.name) / "runtime"
+        self.runtime_dir.mkdir(mode=0o700)
+        self.config_dir = Path(self.directory.name) / "config"
+        self.config_dir.mkdir(mode=0o700)
+        self.environment = patch.dict(os.environ, {
+            "XDG_RUNTIME_DIR": str(self.runtime_dir),
+            "XDG_CONFIG_HOME": str(self.config_dir)
+        })
+        self.environment.start()
+        self.addCleanup(self.environment.stop)
+        shell_path = self.config_dir / "omarchy/shell.json"
+        shell_path.parent.mkdir(parents=True, exist_ok=True)
+        shell_path.write_text(json.dumps({"bar": {"layout": {"right": [{"id": tile.PLUGIN_ID, "active": True, "maxWindows": 2}]}}}))
+
+    def test_lock_does_not_truncate_existing_content(self):
+        lock_file = self.runtime_dir / "omarchy-simple-tile.lock"
+        lock_file.write_bytes(b"EXISTING_LOCK_CONTENT_PRESERVE")
+        clients = [client(), client("0xbb"), client("0xcc")]
+        with patch.object(tile, "hypr", side_effect=[json.dumps(clients), json.dumps(WORKSPACES)]):
+            res = tile.handle_open("0xaa", dry_run=True)
+            self.assertEqual(res["status"], "planned")
+        self.assertEqual(lock_file.read_bytes(), b"EXISTING_LOCK_CONTENT_PRESERVE")
+
+    def test_reject_symlink_lock_path(self):
+        target_file = Path(self.directory.name) / "secret.txt"
+        target_file.write_text("SENSITIVE_USER_DATA")
+        lock_file = self.runtime_dir / "omarchy-simple-tile.lock"
+        lock_file.symlink_to(target_file)
+        with self.assertRaisesRegex(RuntimeError, "unsafe pre-existing"):
+            with tile.runtime_lock():
+                pass
+        self.assertEqual(target_file.read_text(), "SENSITIVE_USER_DATA")
+
+    def test_reject_symlinked_runtime_directory(self):
+        real_dir = Path(self.directory.name) / "real_dir"
+        real_dir.mkdir(mode=0o700)
+        symlink_runtime = Path(self.directory.name) / "symlink_runtime"
+        symlink_runtime.symlink_to(real_dir)
+        with patch.dict(os.environ, {"XDG_RUNTIME_DIR": str(symlink_runtime)}):
+            with self.assertRaisesRegex(RuntimeError, "unsafe symlinked"):
+                tile.get_runtime_dir()
+
+    def test_fallback_runtime_directory_symlink_rejection(self):
+        with patch.dict(os.environ, {"XDG_RUNTIME_DIR": ""}):
+            with patch.object(Path, "lstat") as mock_lstat, patch.object(Path, "is_symlink", return_value=True):
+                with self.assertRaisesRegex(RuntimeError, "unsafe pre-existing symlinked"):
+                    tile.get_runtime_dir()
+
+    def test_fallback_runtime_directory_insecure_permissions(self):
+        with patch.dict(os.environ, {"XDG_RUNTIME_DIR": ""}):
+            mock_stat = type("Stat", (), {"st_mode": 0o777, "st_uid": os.getuid()})()
+            with patch.object(Path, "lstat", return_value=mock_stat), patch.object(Path, "is_symlink", return_value=False), patch("stat.S_ISDIR", return_value=True):
+                with self.assertRaisesRegex(RuntimeError, "unsafe runtime directory permissions"):
+                    tile.get_runtime_dir()
+
+
 if __name__ == "__main__":
     unittest.main()
+
