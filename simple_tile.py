@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""Handle one openwindow event. Omarchy owns the UI and event subscription."""
+
+from __future__ import annotations
+
+import argparse
+from collections import Counter
+import fcntl
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+import time
+
+PLUGIN_ID = "ubruckhaus.simple-tile"
+
+
+def normalize_addr(value):
+    address = str(value).lower().removeprefix("0x")
+    if not re.fullmatch(r"[0-9a-f]+", address):
+        raise ValueError("invalid window address")
+    return "0x" + address
+
+
+def is_tiled(client):
+    ws = client.get("workspace", {}).get("id", 0)
+    return (type(ws) is int and ws > 0 and client.get("mapped", False)
+            and not client.get("floating", False)
+            and not client.get("fullscreen", 0)
+            and not client.get("hidden", False))
+
+
+def tiling_counts(clients):
+    return Counter(c["workspace"]["id"] for c in clients if is_tiled(c))
+
+
+def pick_target_ws(workspaces, counts, current_ws_id, max_windows):
+    """Scan forward on this monitor; never reuse another monitor's ID."""
+    if type(current_ws_id) is not int or current_ws_id <= 0:
+        return None
+    source = next((w for w in workspaces if w["id"] == current_ws_id), None)
+    if source is None:
+        return None
+    same_monitor = sorted(w["id"] for w in workspaces
+                          if w["monitor"] == source["monitor"] and w["id"] > 0)
+    for candidate in same_monitor:
+        if candidate > current_ws_id and counts.get(candidate, 0) < max_windows:
+            return candidate
+    used = {w["id"] for w in workspaces}
+    candidate = max(same_monitor) + 1
+    while candidate in used:
+        candidate += 1
+    return candidate
+
+
+def plan_move(clients, workspaces, address, cap):
+    window = next((c for c in clients if c.get("address") == address), None)
+    # A group moves together; leave deliberate tab groups alone.
+    if not window or not is_tiled(window) or window.get("grouped"):
+        return None
+    counts = tiling_counts(clients)
+    source = window["workspace"]["id"]
+    if counts[source] <= cap:
+        return None
+    target = pick_target_ws(workspaces, counts, source, cap)
+    return {"address": address, "source": source, "target": target} if target else None
+
+
+def read_settings():
+    path = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "omarchy/shell.json"
+    with path.open() as stream:
+        config = json.load(stream)
+    entries = config.get("bar", {}).get("layout", {})
+    for section in ("left", "center", "right"):
+        for entry in entries.get(section, []):
+            if entry.get("id") == PLUGIN_ID:
+                cap = entry.get("maxWindows", 2)
+                if type(cap) is not int or not 1 <= cap <= 8:
+                    cap = 2
+                return {"enabled": entry.get("active", True) is True,
+                        "cap": cap, "follow": entry.get("follow", True) is True}
+    return {"enabled": False, "cap": 2, "follow": True}
+
+
+def hypr(*args):
+    result = subprocess.run(["hyprctl", *args], capture_output=True,
+                            text=True, timeout=3, check=True)
+    return result.stdout
+
+
+def move_expression(address, target, follow):
+    # Only validated hexadecimal addresses and integers enter Lua code.
+    address = normalize_addr(address)
+    if type(target) is not int or target <= 0:
+        raise ValueError("invalid target workspace")
+    return ('hl.dispatch(hl.dsp.window.move({window="address:%s", '
+            'workspace="%d", follow=%s}))' %
+            (address, target, "true" if follow else "false"))
+
+
+def handle_open(address, dry_run=False):
+    # All bar instances share this lock. Re-query after acquiring it so
+    # simultaneous windows and multi-monitor event delivery cannot overfill.
+    runtime = os.environ.get("XDG_RUNTIME_DIR")
+    if not runtime:
+        raise RuntimeError("XDG_RUNTIME_DIR is required")
+    with (Path(runtime) / "omarchy-simple-tile.lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        for attempt in range(4):
+            settings = read_settings()
+            if not settings["enabled"]:
+                return {"status": "paused"}
+            clients = json.loads(hypr("clients", "-j"))
+            window = next((c for c in clients if c.get("address") == address), None)
+            if window and window.get("mapped"):
+                break
+            if attempt < 3:
+                time.sleep(0.1)
+        workspaces = json.loads(hypr("workspaces", "-j"))
+        plan = plan_move(clients, workspaces, address, settings["cap"])
+        if plan is None:
+            return {"status": "unchanged"}
+        if dry_run:
+            return {"status": "planned", **plan}
+        output = hypr("eval", move_expression(address, plan["target"], settings["follow"]))
+        # hyprctl can exit successfully while reporting a Lua error.
+        after = json.loads(hypr("clients", "-j"))
+        moved = next((c for c in after if c.get("address") == address), None)
+        if not moved or moved.get("workspace", {}).get("id") != plan["target"]:
+            raise RuntimeError("move was not confirmed: " + output.strip())
+        return {"status": "moved", **plan}
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--window", required=True, type=normalize_addr)
+    parser.add_argument("--dry-run", action="store_true", help="report a move without dispatching it")
+    args = parser.parse_args(argv)
+    try:
+        print(json.dumps(handle_open(args.window, args.dry_run)))
+        return 0
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+        print(json.dumps({"status": "error", "message": str(error)}))
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "ubruckhaus.simple-tile",
+  "name": "Simple Tile",
+  "version": "0.1.0",
+  "author": "uBruckhaus",
+  "description": "Give your windows room. Automatically move overflow to the next workspace.",
+  "kinds": ["bar-widget"],
+  "entryPoints": {"barWidget": "BarWidget.qml"},
+  "barWidget": {
+    "displayName": "Simple Tile",
+    "description": "A window limit, a pause button, and calmer workspaces.",
+    "category": "Windows",
+    "defaultSection": "right",
+    "allowMultiple": false
+  }
+}
