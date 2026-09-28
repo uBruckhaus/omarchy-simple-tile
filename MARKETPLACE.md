@@ -10,8 +10,8 @@ This document contains the ready-to-use copy, metadata, and feature breakdown fo
 - **Display Name**: `Simple Tile`
 - **Version**: `0.1.0`
 - **Author**: `Uwe Bruckhaus`
-- **Category**: `Windows` *(Alternative: `Compositor`)*
-- **Tags**: `tiling`, `workspaces`, `windows`, `hyprland`, `bar-widget`, `quickshell`
+- **Category**: `Desktop` *(Alternative: `Widgets`)*
+- **Tags**: `Workspaces`, `Hyprland`, `Bar`
 - **Repository**: `https://github.com/uBruckhaus/omarchy-simple-tile`
 - **License**: `MIT`
 - **Default Bar Section**: `right`

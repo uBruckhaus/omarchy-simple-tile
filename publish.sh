@@ -48,11 +48,11 @@ $REPO_URL
 
 ### Category
 
-Windows
+Desktop
 
 ### Tags
 
-Tiling, Workspaces, Windows, Hyprland, Bar, Quickshell
+Workspaces, Hyprland, Bar
 
 ### Maintainer notes
 
