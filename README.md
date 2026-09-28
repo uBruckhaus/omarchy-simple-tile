@@ -8,7 +8,7 @@ Simple Tile is a small Omarchy bar plugin for people who like tiled windows
 without squeezing everything onto one workspace. With a limit of **2**, your
 first two windows stay together; the third moves to the next workspace with room.
 
-- **1–8 windows** per workspace, selectable from the bar.
+- **1–8 windows** per workspace, selectable globally or customizable for each individual workspace from the bar.
 - **Pause anytime** with a right-click. Existing windows stay put.
 - **Follow the window**, or keep working on your current workspace.
 - **Native Omarchy styling** that follows your desktop theme.
@@ -26,7 +26,7 @@ omarchy plugin add https://github.com/uBruckhaus/omarchy-simple-tile.git
 omarchy plugin enable ubruckhaus.simple-tile
 ```
 
-The widget appears on the right of the bar. Click **▦ 2** to open settings.
+The widget appears on the right of the bar. Click **▦** to open settings.
 Right-click to pause or resume. In the popup, use Tab to navigate controls,
 Enter or Space to activate them, and Escape to close.
 
@@ -41,12 +41,20 @@ omarchy plugin remove ubruckhaus.simple-tile
 Only newly opened, mapped, visible tiling windows trigger a move. Floating
 windows, fullscreen windows, scratchpads, and newly opened tab-group members
 are left alone. Existing windows are never rearranged when you change the limit
-or resume the plugin. Manually moving windows does not trigger enforcement.
+or resume the plugin.
+
+**Manual moves override the limit:** Manually moving a window to another
+workspace (for example, using `Super+Shift+2` or dragging) intentionally
+overrides the workspace window limit without being redirected. This is fully
+intended: Simple Tile manages incoming overflow when windows first open,
+but always respects your manual arrangements and never fights your manual moves.
 
 Simple Tile scans higher-numbered workspaces on the source monitor for room.
-If those are full, it chooses a new number after that monitor's highest workspace,
-skipping IDs already used on other monitors. It targets the new window by address,
-so changing focus cannot cause a different window to be moved.
+Each workspace respects either its specific limit or the global default limit.
+If candidate workspaces on that monitor are full, it chooses a new number after
+that monitor's highest workspace, skipping IDs already used on other monitors.
+It targets the new window by address, so changing focus cannot cause a
+different window to be moved.
 
 Hyprland remains responsible for creating new workspaces and applying your
 workspace rules, including explicit monitor assignments. Named and special
@@ -62,12 +70,18 @@ Settings live inline in `~/.config/omarchy/shell.json`, on the widget's bar entr
   "id": "ubruckhaus.simple-tile",
   "active": true,
   "maxWindows": 2,
+  "workspaceCaps": {
+    "1": 3,
+    "2": 1
+  },
   "follow": true
 }
 ```
 
-Use the popup to change them. Omarchy saves the settings and shares them across
-monitors. Pausing keeps the control visible; disabling the plugin removes it.
+Use the popup to change them. You can configure a default limit for all workspaces,
+or select any workspace (1–10) to customize its limit individually or reset it back
+to default. Omarchy saves the settings and shares them across monitors.
+Pausing keeps the control visible; disabling the plugin removes it.
 The prototype's separate `simple-tile/config.json` is no longer used.
 
 ## Development

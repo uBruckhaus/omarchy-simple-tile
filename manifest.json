@@ -3,13 +3,29 @@
   "id": "ubruckhaus.simple-tile",
   "name": "Simple Tile",
   "version": "0.1.0",
-  "author": "uBruckhaus",
-  "description": "Give your windows room. Automatically move overflow to the next workspace.",
-  "kinds": ["bar-widget"],
-  "entryPoints": {"barWidget": "BarWidget.qml"},
+  "author": "Uwe Bruckhaus",
+  "license": "MIT",
+  "description": "Give your windows room. Automatically move overflow to the next workspace; manual moves always take precedence.",
+  "homepage": "https://github.com/uBruckhaus/omarchy-simple-tile",
+  "repository": "https://github.com/uBruckhaus/omarchy-simple-tile",
+  "keywords": [
+    "tiling",
+    "workspaces",
+    "windows",
+    "hyprland",
+    "omarchy",
+    "bar-widget"
+  ],
+  "kinds": [
+    "bar-widget"
+  ],
+  "keepLoaded": false,
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
   "barWidget": {
     "displayName": "Simple Tile",
-    "description": "A window limit, a pause button, and calmer workspaces.",
+    "description": "A window limit, a pause button, and calmer workspaces. Manual moves override limits.",
     "category": "Windows",
     "defaultSection": "right",
     "allowMultiple": false

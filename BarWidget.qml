@@ -10,15 +10,79 @@ Ui.BarWidget {
     moduleName: "ubruckhaus.simple-tile"
     readonly property bool tilingActive: setting("active", true) === true
     readonly property int cap: Math.max(1, Math.min(8, Number(setting("maxWindows", 2)) || 2))
+    readonly property var workspaceCaps: setting("workspaceCaps", {}) || ({})
     readonly property bool follow: setting("follow", true) === true
+    readonly property int currentWsId: (Hyprland.focusedWorkspace && Hyprland.focusedWorkspace.id > 0) ? Hyprland.focusedWorkspace.id : 1
+    property int selectedWorkspace: 0
     property bool opened: false
-    property string lastMessage: "New windows will move when a workspace is full."
+    property string lastMessage: "New windows move on overflow. Manual moves (e.g. Super+Shift+N) override the limit as intended."
     property bool failed: false
     property var pending: []
     implicitWidth: button.implicitWidth
     implicitHeight: button.implicitHeight
 
-    function open() { opened = true }
+    onOpenedChanged: {
+        if (opened) {
+            selectedWorkspace = root.currentWsId > 0 ? root.currentWsId : 0
+        }
+    }
+
+    function hasCustomCap(wsId) {
+        if (!wsId || wsId <= 0 || !workspaceCaps) return false
+        var val = workspaceCaps[String(wsId)]
+        return typeof val === "number" && val >= 1 && val <= 8
+    }
+
+    function capForWorkspace(wsId) {
+        if (hasCustomCap(wsId)) {
+            return Number(workspaceCaps[String(wsId)])
+        }
+        return root.cap
+    }
+
+    function effectiveCapFor(wsId) {
+        if (wsId === 0) return root.cap
+        return capForWorkspace(wsId)
+    }
+
+    readonly property int activeWsCap: capForWorkspace(currentWsId)
+    readonly property bool activeWsCustom: hasCustomCap(currentWsId)
+
+    readonly property var workspaceList: {
+        var list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        if (Hyprland.workspaces && Hyprland.workspaces.values) {
+            var vals = Hyprland.workspaces.values
+            for (var i = 0; i < vals.length; i++) {
+                var wid = vals[i].id
+                if (wid > 0 && list.indexOf(wid) === -1) list.push(wid)
+            }
+        }
+        if (workspaceCaps) {
+            for (var k in workspaceCaps) {
+                var kwid = parseInt(k, 10)
+                if (kwid > 0 && list.indexOf(kwid) === -1) list.push(kwid)
+            }
+        }
+        list.sort(function(a, b) { return a - b })
+        return list
+    }
+
+    function setWorkspaceCap(wsId, newCap) {
+        var current = Object.assign({}, workspaceCaps)
+        current[String(wsId)] = newCap
+        updateSetting("workspaceCaps", current)
+    }
+
+    function resetWorkspaceCap(wsId) {
+        var current = Object.assign({}, workspaceCaps)
+        delete current[String(wsId)]
+        updateSetting("workspaceCaps", current)
+    }
+
+    function open() {
+        selectedWorkspace = root.currentWsId > 0 ? root.currentWsId : 0
+        opened = true
+    }
     function close() { opened = false }
     function closeForPopoutSwitch() { close() }
     function updateSetting(key, value) {
@@ -83,9 +147,17 @@ Ui.BarWidget {
         id: button
         anchors.fill: parent
         bar: root.bar
-        text: root.failed ? "▦ !" : "▦ " + (root.tilingActive ? root.cap : "Ⅱ")
+        text: root.failed ? "▦ !" : "▦"
+        fontSize: Style.font.icon
+        active: root.failed
         dimmed: !root.tilingActive
-        tooltipText: "Simple Tile · " + (root.tilingActive ? root.cap + " windows per workspace" : "Paused") + "\nClick for settings · Right-click to pause"
+        tooltipText: {
+            if (!root.tilingActive) return "Simple Tile · Paused\nClick for settings · Right-click to resume"
+            if (root.activeWsCustom) {
+                return "Simple Tile · Workspace " + root.currentWsId + ": " + root.activeWsCap + " windows (custom, default: " + root.cap + ")\nClick for settings · Right-click to pause"
+            }
+            return "Simple Tile · Workspace " + root.currentWsId + ": " + root.cap + " windows per workspace\nClick for settings · Right-click to pause"
+        }
         onPressed: function(mouseButton) {
             if (mouseButton === Qt.RightButton) root.updateSetting("active", !root.tilingActive)
             else root.opened = !root.opened
@@ -126,17 +198,163 @@ Ui.BarWidget {
             Ui.Toggle {
                 width: parent.width
                 label: root.tilingActive ? "Automatic tiling" : "Tiling paused"
-                description: "Move new windows when the workspace is full"
+                description: "Move new windows when full · Manual moves override"
                 checked: root.tilingActive
                 onClicked: root.updateSetting("active", !root.tilingActive)
             }
             Text {
-                text: "WINDOWS PER WORKSPACE"
+                text: "WORKSPACES"
                 color: Color.foreground
                 opacity: 0.65
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
                 font.letterSpacing: 1
+            }
+            Ui.Button {
+                id: allCard
+                width: parent.width
+                implicitHeight: Style.space(34)
+                selected: root.selectedWorkspace === 0
+                bordered: true
+                focusable: true
+                onClicked: root.selectedWorkspace = 0
+                Accessible.name: "All workspaces default"
+                tooltipText: "Set the default window limit applied to all workspaces"
+
+                Item {
+                    anchors.fill: parent
+                    anchors.leftMargin: Style.space(10)
+                    anchors.rightMargin: Style.space(10)
+                    enabled: false
+
+                    Text {
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "All Workspaces"
+                        color: Color.foreground
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.bodySmall
+                        font.bold: allCard.selected
+                        opacity: allCard.selected ? 1.0 : 0.85
+                    }
+
+                    Text {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "Default: " + root.cap + " windows"
+                        color: allCard.selected ? Color.accent : Color.foreground
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                        opacity: allCard.selected ? 1.0 : 0.65
+                    }
+                }
+            }
+            Grid {
+                width: parent.width
+                columns: 5
+                spacing: Style.space(6)
+                Repeater {
+                    model: root.workspaceList
+                    Ui.Button {
+                        id: wsCard
+                        required property int modelData
+                        width: (content.width - Style.space(24)) / 5
+                        implicitHeight: Style.space(46)
+                        selected: root.selectedWorkspace === modelData
+                        bordered: true
+                        focusable: true
+                        tooltipText: "Workspace " + modelData + (modelData === root.currentWsId ? " (Active)" : "") + "\nLimit: " + root.capForWorkspace(modelData) + " windows" + (root.hasCustomCap(modelData) ? " (custom)" : " (default)")
+                        onClicked: root.selectedWorkspace = modelData
+                        Accessible.name: "Workspace " + modelData
+
+                        Item {
+                            anchors.fill: parent
+                            anchors.topMargin: Style.space(4)
+                            anchors.bottomMargin: Style.space(4)
+                            anchors.leftMargin: Style.space(6)
+                            anchors.rightMargin: Style.space(6)
+                            enabled: false
+
+                            Row {
+                                id: cardHeader
+                                anchors.top: parent.top
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                height: Style.space(13)
+
+                                Text {
+                                    text: "WS " + wsCard.modelData
+                                    color: Color.foreground
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.caption
+                                    font.bold: true
+                                    opacity: wsCard.selected ? 1.0 : 0.8
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+
+                                Item {
+                                    width: 1
+                                    height: 1
+                                    anchors.right: activeDot.left
+                                }
+
+                                Rectangle {
+                                    id: activeDot
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: Style.space(5)
+                                    height: Style.space(5)
+                                    radius: width / 2
+                                    color: Color.accent
+                                    visible: wsCard.modelData === root.currentWsId
+                                }
+                            }
+
+                            Rectangle {
+                                id: cardDivider
+                                anchors.top: cardHeader.bottom
+                                anchors.topMargin: Style.space(2)
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                height: 1
+                                color: Color.foreground
+                                opacity: 0.12
+                            }
+
+                            Text {
+                                anchors.top: cardDivider.bottom
+                                anchors.bottom: parent.bottom
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                verticalAlignment: Text.AlignVCenter
+                                text: "▦ " + root.capForWorkspace(wsCard.modelData)
+                                color: root.hasCustomCap(wsCard.modelData) ? Color.accent : Color.foreground
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.bodySmall
+                                font.bold: root.hasCustomCap(wsCard.modelData) || wsCard.selected
+                                opacity: (root.hasCustomCap(wsCard.modelData) || wsCard.selected) ? 1.0 : 0.65
+                            }
+                        }
+                    }
+                }
+            }
+            Text {
+                text: root.selectedWorkspace === 0
+                    ? "WINDOW LIMIT (DEFAULT)"
+                    : ("WINDOW LIMIT FOR WORKSPACE " + root.selectedWorkspace + (root.hasCustomCap(root.selectedWorkspace) ? " (CUSTOM)" : " (DEFAULT: " + root.cap + ")"))
+                color: Color.foreground
+                opacity: 0.65
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                font.letterSpacing: 1
+            }
+            Ui.Button {
+                visible: root.selectedWorkspace > 0 && root.hasCustomCap(root.selectedWorkspace)
+                width: parent.width
+                text: "Reset workspace " + root.selectedWorkspace + " to default (" + root.cap + ")"
+                bordered: true
+                focusable: true
+                fontSize: Style.font.caption
+                onClicked: root.resetWorkspaceCap(root.selectedWorkspace)
             }
             Grid {
                 width: parent.width
@@ -148,11 +366,17 @@ Ui.BarWidget {
                         required property int index
                         width: (content.width - Style.space(18)) / 4
                         text: String(index + 1)
-                        selected: root.cap === index + 1
+                        selected: root.effectiveCapFor(root.selectedWorkspace) === index + 1
                         bordered: true
                         focusable: true
-                        onClicked: root.updateSetting("maxWindows", index + 1)
-                        Accessible.name: (index + 1) + " windows per workspace"
+                        onClicked: {
+                            if (root.selectedWorkspace === 0) {
+                                root.updateSetting("maxWindows", index + 1)
+                            } else {
+                                root.setWorkspaceCap(root.selectedWorkspace, index + 1)
+                            }
+                        }
+                        Accessible.name: (index + 1) + " windows"
                     }
                 }
             }

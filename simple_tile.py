@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Handle one openwindow event. Omarchy owns the UI and event subscription."""
+"""Handle one openwindow event. Omarchy owns the UI and event subscription.
+
+Only newly opened windows trigger automatic overflow moves. Manually moving
+windows (e.g. with Super+Shift+2) intentionally overrides the workspace window
+limit, preserving full user control over window layout.
+"""
 
 from __future__ import annotations
 
@@ -36,7 +41,7 @@ def tiling_counts(clients):
     return Counter(c["workspace"]["id"] for c in clients if is_tiled(c))
 
 
-def pick_target_ws(workspaces, counts, current_ws_id, max_windows):
+def pick_target_ws(workspaces, counts, current_ws_id, max_windows, workspace_caps=None):
     """Scan forward on this monitor; never reuse another monitor's ID."""
     if type(current_ws_id) is not int or current_ws_id <= 0:
         return None
@@ -46,7 +51,8 @@ def pick_target_ws(workspaces, counts, current_ws_id, max_windows):
     same_monitor = sorted(w["id"] for w in workspaces
                           if w["monitor"] == source["monitor"] and w["id"] > 0)
     for candidate in same_monitor:
-        if candidate > current_ws_id and counts.get(candidate, 0) < max_windows:
+        cand_cap = workspace_caps.get(candidate, max_windows) if workspace_caps else max_windows
+        if candidate > current_ws_id and counts.get(candidate, 0) < cand_cap:
             return candidate
     used = {w["id"] for w in workspaces}
     candidate = max(same_monitor) + 1
@@ -55,16 +61,17 @@ def pick_target_ws(workspaces, counts, current_ws_id, max_windows):
     return candidate
 
 
-def plan_move(clients, workspaces, address, cap):
+def plan_move(clients, workspaces, address, cap, workspace_caps=None):
     window = next((c for c in clients if c.get("address") == address), None)
     # A group moves together; leave deliberate tab groups alone.
     if not window or not is_tiled(window) or window.get("grouped"):
         return None
     counts = tiling_counts(clients)
     source = window["workspace"]["id"]
-    if counts[source] <= cap:
+    source_cap = workspace_caps.get(source, cap) if workspace_caps else cap
+    if counts[source] <= source_cap:
         return None
-    target = pick_target_ws(workspaces, counts, source, cap)
+    target = pick_target_ws(workspaces, counts, source, cap, workspace_caps)
     return {"address": address, "source": source, "target": target} if target else None
 
 
@@ -79,9 +86,21 @@ def read_settings():
                 cap = entry.get("maxWindows", 2)
                 if type(cap) is not int or not 1 <= cap <= 8:
                     cap = 2
+                raw_caps = entry.get("workspaceCaps", {})
+                workspace_caps = {}
+                if isinstance(raw_caps, dict):
+                    for k, v in raw_caps.items():
+                        ws_id = None
+                        if type(k) is int:
+                            ws_id = k
+                        elif isinstance(k, str) and k.isdigit():
+                            ws_id = int(k)
+                        if ws_id is not None and ws_id > 0 and type(v) is int and 1 <= v <= 8:
+                            workspace_caps[ws_id] = v
                 return {"enabled": entry.get("active", True) is True,
-                        "cap": cap, "follow": entry.get("follow", True) is True}
-    return {"enabled": False, "cap": 2, "follow": True}
+                        "cap": cap, "workspace_caps": workspace_caps,
+                        "follow": entry.get("follow", True) is True}
+    return {"enabled": False, "cap": 2, "workspace_caps": {}, "follow": True}
 
 
 def hypr(*args):
@@ -105,7 +124,8 @@ def handle_open(address, dry_run=False):
     # simultaneous windows and multi-monitor event delivery cannot overfill.
     runtime = os.environ.get("XDG_RUNTIME_DIR")
     if not runtime:
-        raise RuntimeError("XDG_RUNTIME_DIR is required")
+        runtime = f"/tmp/omarchy-simple-tile-{os.getuid()}"
+        os.makedirs(runtime, mode=0o700, exist_ok=True)
     with (Path(runtime) / "omarchy-simple-tile.lock").open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         for attempt in range(4):
@@ -119,7 +139,7 @@ def handle_open(address, dry_run=False):
             if attempt < 3:
                 time.sleep(0.1)
         workspaces = json.loads(hypr("workspaces", "-j"))
-        plan = plan_move(clients, workspaces, address, settings["cap"])
+        plan = plan_move(clients, workspaces, address, settings["cap"], settings.get("workspace_caps"))
         if plan is None:
             return {"status": "unchanged"}
         if dry_run:
