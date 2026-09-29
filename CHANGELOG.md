@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.2.1 — 2026-09-29
+
+Includes all 0.2.0 features below. Fixes a workspace-capture test that depended
+on the developer’s desktop configuration; it now uses isolated settings and
+works on clean CI runners. Runtime behavior is unchanged from 0.2.0.
+
 ## 0.2.0 — 2026-09-29
 
 **Give your windows room. Make every workspace your own.**

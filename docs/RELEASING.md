@@ -1,6 +1,6 @@
 # Release checks
 
-## 0.2.0
+## 0.2.1
 
 ```sh
 python3 -m unittest discover -s tests -v

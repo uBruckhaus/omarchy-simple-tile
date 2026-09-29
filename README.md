@@ -23,13 +23,13 @@ when you need it.
   right-click help, and a right-click pause button on the bar.
 
 See the [user manual](MANUAL.md) for controls and workflows, and the
-[0.2.0 release notes](CHANGELOG.md) for what changed.
+[0.2.1 release notes](CHANGELOG.md) for what changed.
 
 ## Install
 
 Requires **Omarchy with the Quickshell plugin system**, Python 3.10+, and
 **Hyprland 0.56.2 with its Lua dispatch API**. Older Waybar-based Omarchy
-installations are not supported. This is an early `0.2.0` release.
+installations are not supported. This is an early `0.2.1` release.
 App launching uses saved argument lists or `uwsm-app` for desktop files;
 PyGObject/GioUnix is an optional fallback. No pip installation is required.
 

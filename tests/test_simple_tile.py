@@ -385,7 +385,9 @@ class DesktopResolutionTests(unittest.TestCase):
              "title": "Web", "at": [0, 0], "size": [800, 600], "floating": False, "pid": 0},
         ]
         with patch.object(tile, "hypr", return_value=json.dumps(clients)), \
-                patch.object(tile, "parse_desktop_files", return_value=[]):
+                patch.object(tile, "parse_desktop_files", return_value=[]), \
+                patch.object(tile, "read_settings", return_value={}), \
+                patch.dict(os.environ, {"HYPRLAND_INSTANCE_SIGNATURE": ""}):
             res = tile.capture_workspace(1)
             self.assertEqual(res["status"], "ok")
             self.assertEqual(res["workspace"], 1)
