@@ -2,24 +2,36 @@
 
 ![Simple Tile — a little room to focus](docs/banner.svg)
 
-**Choose a window limit. Let the next workspace take the overflow.**
+**Give your windows room. Make every workspace your own.**
 
-Simple Tile is a small Omarchy bar plugin for people who like tiled windows
-without squeezing everything onto one workspace. With a limit of **2**, your
-first two windows stay together; the third moves to the next workspace with room.
+Simple Tile brings workspace limits, visual layout presets, and saved app
+workspaces to your Omarchy bar. Keep everyday windows comfortably tiled, or
+save a workspace for coding, research, and communication and bring it back
+when you need it.
 
-- **1–8 windows** per workspace, selectable globally or customizable for each individual workspace from the bar.
-- **Pause anytime** with a right-click. Existing windows stay put.
-- **Follow the window**, or keep working on your current workspace.
-- **Native Omarchy styling** that follows your desktop theme.
-- **Event-driven:** no background Python daemon, tray service, or idle polling.
-- **Python standard library only.** No pip packages or PyGObject required.
+- **Room to focus:** set a limit of 1–4 windows globally or per workspace.
+  New overflow windows move forward to a workspace with room; focus follows.
+- **Layouts at a click:** side-by-side, stacked, master-left, master-right,
+  columns, and a 2×2 grid. Native mode removes limits and automatic overflow.
+- **Your apps, your arrangement:** save an App Preset with window geometry
+  and app icons, launch missing apps, and rebuild the saved layout.
+- **Restore on your terms:** move conflicting windows, close them, keep them
+  floating, or cancel. Optional auto-move makes repeat restores quicker.
+- **Ready after login:** optionally restore saved workspaces once per
+  Hyprland session.
+- **At home in Omarchy:** theme-aware controls, workspace cards, contextual
+  right-click help, and a right-click pause button on the bar.
+
+See the [user manual](MANUAL.md) for controls and workflows, and the
+[0.2.0 release notes](CHANGELOG.md) for what changed.
 
 ## Install
 
 Requires **Omarchy with the Quickshell plugin system**, Python 3.10+, and
 **Hyprland 0.56.2 with its Lua dispatch API**. Older Waybar-based Omarchy
-installations are not supported. This is an early `0.1.0` release.
+installations are not supported. This is an early `0.2.0` release.
+App launching uses saved argument lists or `uwsm-app` for desktop files;
+PyGObject/GioUnix is an optional fallback. No pip installation is required.
 
 ```sh
 omarchy plugin add https://github.com/uBruckhaus/omarchy-simple-tile.git
@@ -40,8 +52,8 @@ omarchy plugin remove ubruckhaus.simple-tile
 
 Only newly opened, mapped, visible tiling windows trigger a move. Floating
 windows, fullscreen windows, scratchpads, and newly opened tab-group members
-are left alone. Existing windows are never rearranged when you change the limit
-or resume the plugin.
+are left alone. Changing the limit does not redistribute existing windows. Selecting a
+geometric preset can rearrange the current workspace.
 
 **Manual moves override the limit:** Manually moving a window to another
 workspace (for example, using `Super+Shift+2` or dragging) intentionally
@@ -61,26 +73,27 @@ workspace rules, including explicit monitor assignments. Named and special
 workspaces are excluded. The limit counts visible tiled clients, not layout
 slots; tabbed/grouped layouts are deliberately not automatically redistributed.
 
+## Presets vs App Presets
+
+Simple Tile supports two modes for your workspaces:
+
+- **Presets (Default):** Set a window limit (1–4 windows) globally or per workspace, and choose from geometric layout presets (Side-by-Side, Stacked, Master-Left, Master-Right, Columns, 2×2 Grid, or Native). When a new window opens and exceeds the limit, Simple Tile automatically moves it to the next workspace on your monitor.
+- **App Presets:** Select any workspace, open and arrange your apps according to your preferences, then click **Save App Preset**:
+  - **Layout Snapshots:** Captures window geometry, count, and arrangement.
+  - **App Icons:** Optionally save the opened applications and display their real application icons directly inside the workspace card in the bar popup.
+  - **Restore / Launch Apps:** Click **Restore App Preset** to launch missing apps, place them on the saved workspace, and rebuild the saved tile positions and proportions using native dwindle tiles. Floating windows regain their saved position and size. Each saved window has its own app launch information, including multiple windows of one app.
+  - Existing windows are matched by app class and, where possible, title. A uniquely matching app on another workspace can be moved back unless it belongs to another saved layout. Apps that cannot open another window report a timeout.
+  - Restoration supports ungrouped, non-fullscreen rectangular tiling arrangements. The restore dialog lets you move, close, or float conflicting windows before restoring. App content (documents, terminal commands, browser tabs) is not restored. Changed monitor geometry and gaps can affect exact pixel sizes.
+  - **Autostart:** Optionally flag the workspace to automatically restore its saved windows once per Hyprland session. Multiple bars and shell reloads do not duplicate startup launches; failed restores can be retried with Restore.
+  - Workspaces using App Presets are never disrupted by automatic overflow moves.
+
 ## Settings
 
-Settings live inline in `~/.config/omarchy/shell.json`, on the widget's bar entry:
+Use the popup to change the global default, customize individual workspace
+limits and layouts, and save or restore App Presets. Workspace cards are
+paged as **1–4** and **5–8**. Settings are stored on the widget's bar entry in
+`~/.config/omarchy/shell.json` and shared across monitors.
 
-```json
-{
-  "id": "ubruckhaus.simple-tile",
-  "active": true,
-  "maxWindows": 2,
-  "workspaceCaps": {
-    "1": 3,
-    "2": 1
-  },
-  "follow": true
-}
-```
-
-Use the popup to change them. You can configure a default limit for all workspaces,
-or select any workspace (1–10) to customize its limit individually or reset it back
-to default. Omarchy saves the settings and shares them across monitors.
 Pausing keeps the control visible; disabling the plugin removes it.
 The prototype's separate `simple-tile/config.json` is no longer used.
 
@@ -88,6 +101,7 @@ The prototype's separate `simple-tile/config.json` is no longer used.
 
 ```sh
 python3 -m unittest discover -s tests -v
+node --test tests/*.js
 omarchy plugin validate .
 ```
 

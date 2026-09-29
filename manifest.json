@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "ubruckhaus.simple-tile",
   "name": "Simple Tile",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "Uwe Bruckhaus",
   "license": "MIT",
-  "description": "Give your windows room. Automatically move overflow to the next workspace; manual moves always take precedence.",
+  "description": "Give your windows room. Workspace limits, layout presets, and saved app workspaces with restore and session autostart.",
   "homepage": "https://github.com/uBruckhaus/omarchy-simple-tile",
   "repository": "https://github.com/uBruckhaus/omarchy-simple-tile",
   "keywords": [
@@ -25,7 +25,7 @@
   },
   "barWidget": {
     "displayName": "Simple Tile",
-    "description": "A window limit, a pause button, and calmer workspaces. Manual moves override limits.",
+    "description": "Choose a layout, save your apps, and restore your workspace from the bar.",
     "category": "Windows",
     "defaultSection": "right",
     "allowMultiple": false
