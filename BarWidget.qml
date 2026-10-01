@@ -1,12 +1,15 @@
 import QtQuick
+import QtQuick.Controls as Controls
 import Quickshell
 import Quickshell.Io
 import Quickshell.Hyprland
-import qs.Commons
-import qs.Ui as Ui
+import "native/Commons"
+import qs.Commons as Theme
+import "native/Ui" as Ui
+import qs.Ui as ShellUi
 import "LayoutState.js" as LayoutState
 
-Ui.BarWidget {
+ShellUi.BarWidget {
     id: root
     moduleName: "ubruckhaus.simple-tile"
     readonly property bool tilingActive: setting("active", true) === true
@@ -41,6 +44,7 @@ Ui.BarWidget {
     property string activeHintBody: ""
     property string activeHintTip: ""
     property bool showManualView: false
+    onShowManualViewChanged: panelScroll.contentY = 0
 
     onOpenedChanged: {
         if (opened) {
@@ -789,7 +793,7 @@ Ui.BarWidget {
         }
     }
 
-    Ui.WidgetButton {
+    ShellUi.WidgetButton {
         id: button
         anchors.fill: parent
         bar: root.bar
@@ -826,6 +830,14 @@ Ui.BarWidget {
         contentWidth: popup.fittedContentWidth(Style.space(420))
         contentHeight: popup.fittedContentHeight(content.implicitHeight)
 
+        Flickable {
+            id: panelScroll
+            anchors.fill: parent
+            contentWidth: width
+            contentHeight: content.implicitHeight
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            Controls.ScrollBar.vertical: Controls.ScrollBar { policy: Controls.ScrollBar.AsNeeded }
         Column {
             id: content
             width: parent.width
@@ -840,9 +852,9 @@ Ui.BarWidget {
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
                     text: "Simple Tile"
-                    color: Color.foreground
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.title
+                    color: Theme.Color.accent
+                    font.family: Theme.Style.font.family
+                    font.pixelSize: Theme.Style.font.title
                     font.bold: true
                 }
 
@@ -2312,9 +2324,9 @@ Ui.BarWidget {
 
                         Text {
                             text: "1. Presets (Dynamic Tiling & Overflow)"
-                            color: Color.accent
+                            color: Theme.Color.accent
                             font.family: Style.font.family
-                            font.pixelSize: Style.font.bodySmall
+                            font.pixelSize: Theme.Style.font.bodySmall
                             font.bold: true
                         }
                         Text {
@@ -2346,9 +2358,9 @@ Ui.BarWidget {
 
                         Text {
                             text: "2. App Presets (Saved Workspaces)"
-                            color: Color.accent
+                            color: Theme.Color.accent
                             font.family: Style.font.family
-                            font.pixelSize: Style.font.bodySmall
+                            font.pixelSize: Theme.Style.font.bodySmall
                             font.bold: true
                         }
                         Text {
@@ -2380,9 +2392,9 @@ Ui.BarWidget {
 
                         Text {
                             text: "3. Conflict Resolution on Restore"
-                            color: Color.accent
+                            color: Theme.Color.accent
                             font.family: Style.font.family
-                            font.pixelSize: Style.font.bodySmall
+                            font.pixelSize: Theme.Style.font.bodySmall
                             font.bold: true
                         }
                         Text {
@@ -2414,9 +2426,9 @@ Ui.BarWidget {
 
                         Text {
                             text: "4. Right-Click Hints & Shortcuts"
-                            color: Color.accent
+                            color: Theme.Color.accent
                             font.family: Style.font.family
-                            font.pixelSize: Style.font.bodySmall
+                            font.pixelSize: Theme.Style.font.bodySmall
                             font.bold: true
                         }
                         Text {
@@ -2439,6 +2451,7 @@ Ui.BarWidget {
                     onClicked: root.showManualView = false
                 }
             }
+        }
         }
     }
 }

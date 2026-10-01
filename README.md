@@ -128,3 +128,5 @@ See [the prototype review](docs/REVIEW.md) for the bugs addressed and
 ## License
 
 MIT © 2026 Uwe Bruckhaus
+
+The plugin popup uses fixed original Omarchy styling, independent of desktop themes. Click **User Manual** for integrated guidance.
