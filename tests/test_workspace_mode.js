@@ -18,7 +18,7 @@ function workspace(saved = false, saveSucceeds = true) {
     });
     state.root = state;
     state.helperScriptPath = () => '/plugin/simple_tile.py';
-    for (const name of ['setWorkspaceMode', 'updateSetting', 'isWorkspaceManual',
+    for (const name of ['saveSettingsEntry', 'setWorkspaceMode', 'updateSetting', 'isWorkspaceManual',
                         'autoPresetForWorkspace', 'defaultAutoPresetFor', 'effectiveCapFor',
                         'hasCustomCap', 'autoPresetLabel', 'setWorkspaceAutoPreset',
                         'isWorkspaceNative', 'selectedWindowCap', 'setWorkspaceCap',

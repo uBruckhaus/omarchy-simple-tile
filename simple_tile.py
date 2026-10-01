@@ -1361,6 +1361,100 @@ def handle_open(address, dry_run=False):
         return {"status": "moved", **plan}
 
 
+def remove_all_presets(dry_run=False):
+    try:
+        workspaces = json.loads(hypr("workspaces", "-j"))
+        ws_ids = sorted([w["id"] for w in workspaces if type(w.get("id")) is int and w["id"] > 0])
+    except Exception:
+        ws_ids = []
+    if not ws_ids:
+        ws_ids = list(range(1, 11))
+    for wid in ws_ids:
+        try:
+            apply_layout_preset(wid, "none", dry_run=dry_run)
+        except Exception:
+            pass
+    return {"status": "ok", "action": "remove_all_presets", "workspaces": ws_ids}
+
+
+def reset_all_presets(dry_run=False):
+    try:
+        settings = read_settings()
+        cap = settings.get("cap", 2)
+        default_preset = settings.get("default_auto_presets", {}).get(str(cap), "side-by-side" if cap == 2 else "master-left" if cap == 3 else "grid")
+    except Exception:
+        default_preset = "side-by-side"
+    try:
+        workspaces = json.loads(hypr("workspaces", "-j"))
+        ws_ids = sorted([w["id"] for w in workspaces if type(w.get("id")) is int and w["id"] > 0])
+    except Exception:
+        ws_ids = []
+    if not ws_ids:
+        ws_ids = list(range(1, 11))
+    for wid in ws_ids:
+        try:
+            apply_layout_preset(wid, default_preset, dry_run=dry_run)
+        except Exception:
+            pass
+    return {"status": "ok", "action": "reset_all_presets", "default_preset": default_preset, "workspaces": ws_ids}
+
+
+def clear_app_preset(ws_id):
+    if type(ws_id) is not int or ws_id <= 0:
+        raise ValueError("invalid workspace id")
+    path = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "omarchy/shell.json"
+    if not path.exists():
+        return {"status": "error", "message": "shell.json not found"}
+    with runtime_lock("settings"):
+        with path.open("r", encoding="utf-8") as f:
+            config = json.load(f)
+        found = False
+        for section in ("left", "center", "right"):
+            for entry in config.get("bar", {}).get("layout", {}).get(section, []):
+                if entry.get("id") == PLUGIN_ID:
+                    layouts = entry.get("workspaceLayouts", {})
+                    if str(ws_id) in layouts:
+                        del layouts[str(ws_id)]
+                        found = True
+                    modes = entry.get("workspaceModes", {})
+                    if str(ws_id) in modes:
+                        del modes[str(ws_id)]
+                        found = True
+        if found:
+            temp_path = path.with_suffix(".tmp")
+            with temp_path.open("w", encoding="utf-8") as f:
+                json.dump(config, f, indent=2)
+                f.write("\n")
+            temp_path.replace(path)
+        return {"status": "ok", "workspace": ws_id, "cleared": found}
+
+
+def clear_all_app_presets():
+    path = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "omarchy/shell.json"
+    if not path.exists():
+        return {"status": "error", "message": "shell.json not found"}
+    with runtime_lock("settings"):
+        with path.open("r", encoding="utf-8") as f:
+            config = json.load(f)
+        found = False
+        for section in ("left", "center", "right"):
+            for entry in config.get("bar", {}).get("layout", {}).get(section, []):
+                if entry.get("id") == PLUGIN_ID:
+                    if entry.get("workspaceLayouts"):
+                        entry["workspaceLayouts"] = {}
+                        found = True
+                    if entry.get("workspaceModes"):
+                        entry["workspaceModes"] = {k: v for k, v in entry["workspaceModes"].items() if v != "manual"}
+                        found = True
+        if found:
+            temp_path = path.with_suffix(".tmp")
+            with temp_path.open("w", encoding="utf-8") as f:
+                json.dump(config, f, indent=2)
+                f.write("\n")
+            temp_path.replace(path)
+        return {"status": "ok", "cleared": "all"}
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--window", required=False, type=normalize_addr, help="handle window open event")
@@ -1372,6 +1466,10 @@ def main(argv=None):
     parser.add_argument("--autostart", action="store_true", help="launch saved apps for all autostart workspaces")
     parser.add_argument("--apply-preset", nargs=2, metavar=("WS_ID", "PRESET"), help="apply layout preset to workspace")
     parser.add_argument("--remove-preset", type=int, metavar="WS_ID", help="remove layout preset from workspace")
+    parser.add_argument("--remove-all-presets", action="store_true", help="remove layout presets from all workspaces (native layout)")
+    parser.add_argument("--reset-all-presets", action="store_true", help="reset all workspaces to default layout preset")
+    parser.add_argument("--clear-app-preset", type=int, metavar="WS_ID", help="remove saved app preset for workspace")
+    parser.add_argument("--clear-all-app-presets", action="store_true", help="remove all saved app presets across all workspaces")
     args = parser.parse_args(argv)
 
     try:
@@ -1386,6 +1484,18 @@ def main(argv=None):
             return 0
         if args.remove_preset is not None:
             print(json.dumps(apply_layout_preset(args.remove_preset, "none", args.dry_run)))
+            return 0
+        if args.remove_all_presets:
+            print(json.dumps(remove_all_presets(args.dry_run)))
+            return 0
+        if args.reset_all_presets:
+            print(json.dumps(reset_all_presets(args.dry_run)))
+            return 0
+        if args.clear_app_preset is not None:
+            print(json.dumps(clear_app_preset(args.clear_app_preset)))
+            return 0
+        if args.clear_all_app_presets:
+            print(json.dumps(clear_all_app_presets()))
             return 0
         if args.apply_preset:
             ws_id = int(args.apply_preset[0])

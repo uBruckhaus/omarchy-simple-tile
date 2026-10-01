@@ -636,6 +636,77 @@ class AppLaunchTests(unittest.TestCase):
             exit_code = tile.main(["--remove-preset", "2", "--dry-run"])
             self.assertEqual(exit_code, 0)
 
+    def test_remove_all_presets(self):
+        workspaces = [{"id": 1}, {"id": 2}]
+        with patch.object(tile, "hypr", side_effect=[json.dumps(workspaces), "[]", "[]"]):
+            res = tile.remove_all_presets(dry_run=True)
+            self.assertEqual(res["status"], "ok")
+            self.assertEqual(res["action"], "remove_all_presets")
+            self.assertEqual(res["workspaces"], [1, 2])
+
+    def test_reset_all_presets(self):
+        workspaces = [{"id": 1}, {"id": 2}]
+        settings = {"cap": 2, "default_auto_presets": {"2": "side-by-side"}}
+        with patch.object(tile, "read_settings", return_value=settings), \
+                patch.object(tile, "hypr", side_effect=[json.dumps(workspaces), "[]", "[]"]):
+            res = tile.reset_all_presets(dry_run=True)
+            self.assertEqual(res["status"], "ok")
+            self.assertEqual(res["action"], "reset_all_presets")
+            self.assertEqual(res["default_preset"], "side-by-side")
+
+    def test_clear_app_preset(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "omarchy/shell.json"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_data = {
+                "bar": {
+                    "layout": {
+                        "right": [
+                            {
+                                "id": tile.PLUGIN_ID,
+                                "workspaceLayouts": {"2": {"apps": [{"name": "app"}]}},
+                                "workspaceModes": {"2": "manual"}
+                            }
+                        ]
+                    }
+                }
+            }
+            config_path.write_text(json.dumps(config_data))
+            with patch.dict(os.environ, {"XDG_CONFIG_HOME": tmpdir}):
+                res = tile.clear_app_preset(2)
+                self.assertEqual(res["status"], "ok")
+                self.assertTrue(res["cleared"])
+                updated = json.loads(config_path.read_text())
+                entry = updated["bar"]["layout"]["right"][0]
+                self.assertNotIn("2", entry.get("workspaceLayouts", {}))
+                self.assertNotIn("2", entry.get("workspaceModes", {}))
+
+    def test_clear_all_app_presets(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "omarchy/shell.json"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_data = {
+                "bar": {
+                    "layout": {
+                        "right": [
+                            {
+                                "id": tile.PLUGIN_ID,
+                                "workspaceLayouts": {"2": {"apps": []}, "3": {"apps": []}},
+                                "workspaceModes": {"2": "manual", "3": "manual", "1": "auto"}
+                            }
+                        ]
+                    }
+                }
+            }
+            config_path.write_text(json.dumps(config_data))
+            with patch.dict(os.environ, {"XDG_CONFIG_HOME": tmpdir}):
+                res = tile.clear_all_app_presets()
+                self.assertEqual(res["status"], "ok")
+                updated = json.loads(config_path.read_text())
+                entry = updated["bar"]["layout"]["right"][0]
+                self.assertEqual(entry.get("workspaceLayouts"), {})
+                self.assertEqual(entry.get("workspaceModes"), {"1": "auto"})
+
 
 if __name__ == "__main__":
     unittest.main()

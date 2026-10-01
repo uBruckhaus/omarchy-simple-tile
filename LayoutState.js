@@ -1,3 +1,5 @@
+.pragma library
+
 // Shared snapshot edits. Removing an app must also remove its restore slots.
 function matchesApp(window, app) {
     var savedApp = window.app || window

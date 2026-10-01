@@ -53,18 +53,18 @@ ShellUi.BarWidget {
     }
     // Bar Icon Modes:
     // 1: Disabled
-    // 2: Enabled, no preset or app preset defined
+    // 2: Enabled, no preset defined (Native tiling)
     // 3: Enabled with defined presets
-    // 4: Enabled, App Preset defined, Autostart OFF (open ring ○ indicator)
-    // 5: Enabled, App Preset defined, Autostart ON (solid dot ● indicator)
+    // 4: Enabled, App Preset defined with Autostart active (Theme accent dot ● indicator)
     readonly property int currentBarIconMode: {
         if (!root.tilingActive) return 1
-        if (root.hasAnyAppPreset) return root.hasAutostartActive ? 5 : 4
+        if (root.hasAnyAppPreset && root.hasAutostartActive) return 4
         if (root.currentWsHasDefinedPreset) return 3
         return 2
     }
     property int selectedWorkspace: 0
     property bool opened: false
+    property bool popoutSwitchClosing: false
     property string lastMessage: "New windows move on overflow in Presets. App Presets preserve custom layouts."
     property bool failed: false
     property bool autostartFinished: false
@@ -75,8 +75,7 @@ ShellUi.BarWidget {
     property var failedAppNames: ({})
     property var failedAppDetails: ({})
     property string activeWorkspaceTab: "presets"
-    width: implicitWidth
-    height: implicitHeight
+    anchors.fill: parent
     implicitWidth: button.implicitWidth
     implicitHeight: button.implicitHeight
 
@@ -100,10 +99,12 @@ ShellUi.BarWidget {
     onOpenedChanged: {
         if (opened) {
             restoreConflict = null
-            selectedWorkspace = root.currentWsId > 0 ? root.currentWsId : 0
-            if (root.currentWsId >= 5 && root.currentWsId <= 8) {
+            if (selectedWorkspace === 0 && root.currentWsId > 0) {
+                selectedWorkspace = root.currentWsId
+            }
+            if (root.selectedWorkspace >= 5 && root.selectedWorkspace <= 8) {
                 workspacePage = 1
-            } else if (root.currentWsId >= 1 && root.currentWsId <= 4) {
+            } else if (root.selectedWorkspace >= 1 && root.selectedWorkspace <= 4) {
                 workspacePage = 0
             }
             if (selectedWorkspace > 0) {
@@ -240,7 +241,7 @@ ShellUi.BarWidget {
             }
         }
 
-        if (bar && bar.shell && bar.shell.updateEntryInline(moduleName, entry)) {
+        if (saveSettingsEntry(entry)) {
             settings = entry
             failed = false
         } else {
@@ -278,7 +279,7 @@ ShellUi.BarWidget {
             }
         }
 
-        if (bar && bar.shell && bar.shell.updateEntryInline(moduleName, entry)) {
+        if (saveSettingsEntry(entry)) {
             settings = entry
             failed = false
         } else {
@@ -319,7 +320,7 @@ ShellUi.BarWidget {
         layouts[String(wsId)] = updated
         var entry = Object.assign({}, settings, {id: moduleName})
         entry["workspaceLayouts"] = layouts
-        if (bar && bar.shell && bar.shell.updateEntryInline(moduleName, entry)) {
+        if (saveSettingsEntry(entry)) {
             settings = entry
             failed = false
             lastMessage = "Removed " + (removed.name || "app") + " from the saved layout."
@@ -424,7 +425,7 @@ ShellUi.BarWidget {
 
     function workspaceAutostart(wsId) {
         var layout = layoutForWorkspace(wsId)
-        return layout ? (layout.autostart === true) : false
+        return layout ? (layout.autostart !== false) : true
     }
 
     function savedLayoutSummary(wsId) {
@@ -501,7 +502,7 @@ ShellUi.BarWidget {
             entry["workspaceModes"] = modes
         }
 
-        if (bar && bar.shell && bar.shell.updateEntryInline(moduleName, entry)) {
+        if (saveSettingsEntry(entry)) {
             settings = entry
             failed = false
             lastMessage = "Set Workspace " + wsId + " limit to " + newCap + " windows"
@@ -534,7 +535,7 @@ ShellUi.BarWidget {
             entry["workspaceModes"] = modes
         }
 
-        if (bar && bar.shell && bar.shell.updateEntryInline(moduleName, entry)) {
+        if (saveSettingsEntry(entry)) {
             settings = entry
             failed = false
             lastMessage = "Reset Workspace " + wsId + " limit to default (" + root.cap + " windows)"
@@ -583,12 +584,13 @@ ShellUi.BarWidget {
     function toggleWorkspaceAutostart(wsId) {
         var layouts = Object.assign({}, workspaceLayouts)
         var layout = Object.assign({}, layouts[String(wsId)] || {})
-        layout.autostart = !layout.autostart
+        layout.autostart = !workspaceAutostart(wsId)
         layouts[String(wsId)] = layout
         updateSetting("workspaceLayouts", layouts)
     }
 
     function clearWorkspaceLayout(wsId) {
+        if (!wsId || wsId <= 0) return
         var layouts = Object.assign({}, workspaceLayouts)
         delete layouts[String(wsId)]
         var modes = Object.assign({}, workspaceModes)
@@ -596,15 +598,143 @@ ShellUi.BarWidget {
         var entry = Object.assign({}, settings, {id: moduleName})
         entry["workspaceLayouts"] = layouts
         entry["workspaceModes"] = modes
-        if (bar && bar.shell && bar.shell.updateEntryInline(moduleName, entry)) {
+        if (saveSettingsEntry(entry)) {
             settings = entry
             failed = false
-            lastMessage = "Cleared App Preset for Workspace " + wsId
+            activeWorkspaceTab = "presets"
+            lastMessage = "Removed App Preset for Workspace " + wsId
             var defaultPreset = autoPresetForWorkspace(wsId) || defaultAutoPresetFor(effectiveCapFor(wsId))
             if (defaultPreset && defaultPreset !== "none") {
                 applyPresetWorker.command = ["python3", root.helperScriptPath(), "--apply-preset", String(wsId), defaultPreset]
                 applyPresetWorker.running = true
             }
+        }
+    }
+
+    function resetWorkspaceToDefault(wsId) {
+        if (!wsId || wsId <= 0) return
+        var entry = Object.assign({}, settings, {id: moduleName})
+        var currentCaps = Object.assign({}, workspaceCaps)
+        delete currentCaps[String(wsId)]
+        entry["workspaceCaps"] = currentCaps
+
+        var currentPresets = Object.assign({}, workspaceAutoPresets)
+        delete currentPresets[String(wsId)]
+        entry["workspaceAutoPresets"] = currentPresets
+
+        var currentModes = Object.assign({}, workspaceModes)
+        delete currentModes[String(wsId)]
+        entry["workspaceModes"] = currentModes
+
+        if (saveSettingsEntry(entry)) {
+            settings = entry
+            failed = false
+            var defaultPreset = defaultAutoPresetFor(root.cap)
+            if (defaultPreset && defaultPreset !== "none" && root.cap > 1) {
+                applyPresetWorker.command = ["python3", root.helperScriptPath(), "--apply-preset", String(wsId), defaultPreset]
+                applyPresetWorker.running = true
+            }
+            lastMessage = "Reset Workspace " + wsId + " to default (" + root.cap + " limit, " + autoPresetLabel(defaultPreset) + ")"
+        } else {
+            failed = true
+            lastMessage = "Could not save settings. Try reopening the plugin."
+        }
+    }
+
+    function saveSettingsEntry(entry) {
+        if (!bar || !bar.shell) return false
+        // The shell returns false for unchanged settings as well as errors.
+        var existing = Object.assign({}, settings, {id: moduleName})
+        var keys = Object.keys(entry)
+        var unchanged = keys.length === Object.keys(existing).length
+        for (var i = 0; unchanged && i < keys.length; i++) {
+            var key = keys[i]
+            unchanged = JSON.stringify(existing[key]) === JSON.stringify(entry[key])
+        }
+        if (unchanged) return true
+        return bar.shell.updateEntryInline(moduleName, entry)
+    }
+
+    function clearAllPresets() {
+        var entry = Object.assign({}, settings, {id: moduleName})
+        entry["workspaceCaps"] = {}
+        entry["workspaceAutoPresets"] = {}
+        entry["defaultAutoPresets"] = {"1": "none", "2": "none", "3": "none", "4": "none"}
+        entry["workspaceModes"] = {}
+        entry["workspaceLayouts"] = {}
+        if (saveSettingsEntry(entry)) {
+            settings = entry
+            restoreConflict = null
+            activeWorkspaceTab = "presets"
+            failedAppNames = ({})
+            failedAppDetails = ({})
+            failed = false
+            applyPresetWorker.command = ["python3", root.helperScriptPath(), "--remove-all-presets"]
+            applyPresetWorker.running = true
+            lastMessage = "Cleared all layout and App Presets. All workspaces use Native tiling."
+        } else {
+            failed = true
+            lastMessage = "Could not save settings. Try reopening the plugin."
+        }
+    }
+
+    function removeAllWorkspacePresets() {
+        var entry = Object.assign({}, settings, {id: moduleName})
+        var presets = {}
+        for (var i = 1; i <= 10; i++) {
+            presets[String(i)] = "none"
+        }
+        entry["workspaceAutoPresets"] = presets
+        if (saveSettingsEntry(entry)) {
+            settings = entry
+            failed = false
+            applyPresetWorker.command = ["python3", root.helperScriptPath(), "--remove-all-presets"]
+            applyPresetWorker.running = true
+            lastMessage = "Removed layout presets for all workspaces (Native tiling)"
+        } else {
+            failed = true
+            lastMessage = "Could not save settings. Try reopening the plugin."
+        }
+    }
+
+    function resetAllWorkspacesToDefault() {
+        var entry = Object.assign({}, settings, {id: moduleName})
+        entry["workspaceCaps"] = {}
+        entry["workspaceAutoPresets"] = {}
+        var modes = Object.assign({}, workspaceModes)
+        for (var k in modes) {
+            if (modes[k] === "manual") delete modes[k]
+        }
+        entry["workspaceModes"] = modes
+        if (saveSettingsEntry(entry)) {
+            settings = entry
+            failed = false
+            applyPresetWorker.command = ["python3", root.helperScriptPath(), "--reset-all-presets"]
+            applyPresetWorker.running = true
+            lastMessage = "Reset all workspaces to global defaults (" + root.cap + " limit, " + autoPresetLabel(defaultAutoPresetFor(root.cap)) + ")"
+        } else {
+            failed = true
+            lastMessage = "Could not save settings. Try reopening the plugin."
+        }
+    }
+
+    function removeAllAppPresets() {
+        var entry = Object.assign({}, settings, {id: moduleName})
+        entry["workspaceLayouts"] = {}
+        var modes = Object.assign({}, workspaceModes)
+        for (var k in modes) {
+            if (modes[k] === "manual") delete modes[k]
+        }
+        entry["workspaceModes"] = modes
+        if (saveSettingsEntry(entry)) {
+            settings = entry
+            failed = false
+            failedAppNames = ({})
+            failedAppDetails = ({})
+            lastMessage = "Removed all saved App Presets across all workspaces"
+        } else {
+            failed = true
+            lastMessage = "Could not save settings. Try reopening the plugin."
         }
     }
 
@@ -619,7 +749,7 @@ ShellUi.BarWidget {
         var layouts = Object.assign({}, workspaceLayouts)
         var existing = layouts[String(wsId)] || {}
         var saveApps = existing.saveApps !== undefined ? existing.saveApps : true
-        var autostart = existing.autostart !== undefined ? existing.autostart : false
+        var autostart = existing.autostart !== undefined ? existing.autostart : true
         layouts[String(wsId)] = {
             mode: "manual",
             saveApps: saveApps,
@@ -634,7 +764,7 @@ ShellUi.BarWidget {
         var entry = Object.assign({}, settings, {id: moduleName})
         entry["workspaceLayouts"] = layouts
         entry["workspaceModes"] = modes
-        if (bar && bar.shell && bar.shell.updateEntryInline(moduleName, entry)) {
+        if (saveSettingsEntry(entry)) {
             settings = entry
             failed = false
             lastMessage = "Saved App Preset for Workspace " + wsId + " (" + (res.count || 0) + " windows)"
@@ -651,11 +781,19 @@ ShellUi.BarWidget {
     }
 
     function open() {
-        selectedWorkspace = root.currentWsId > 0 ? root.currentWsId : 0
+        if (root.selectedWorkspace <= 0) {
+            selectedWorkspace = root.currentWsId > 0 ? root.currentWsId : 0
+        }
         opened = true
     }
-    function close() { opened = false }
-    function closeForPopoutSwitch() { close() }
+    function close() {
+        opened = false
+    }
+    function closeForPopoutSwitch() {
+        popoutSwitchClosing = true
+        close()
+        Qt.callLater(function() { popoutSwitchClosing = false })
+    }
     function togglePanel() {
         if (opened) close()
         else open()
@@ -664,7 +802,7 @@ ShellUi.BarWidget {
         if (settings[key] === value) return
         var entry = Object.assign({}, settings, {id: moduleName})
         entry[key] = value
-        if (bar && bar.shell && bar.shell.updateEntryInline(moduleName, entry)) {
+        if (saveSettingsEntry(entry)) {
             settings = entry
             failed = false
         } else {
@@ -789,7 +927,11 @@ ShellUi.BarWidget {
                 try {
                     var res = JSON.parse(text)
                     if (res.status === "ok") {
-                        if (res.preset === "none") {
+                        if (res.action === "remove_all_presets") {
+                            root.lastMessage = "All workspaces set to Native layout (no presets)"
+                        } else if (res.action === "reset_all_presets") {
+                            root.lastMessage = "All workspaces reset to default layout (" + root.autoPresetLabel(res.default_preset) + ")"
+                        } else if (res.preset === "none") {
                             root.lastMessage = "Preset removed (Native layout) on Workspace " + res.workspace
                         } else {
                             root.lastMessage = "Applied " + root.autoPresetLabel(res.preset) + " to Workspace " + res.workspace
@@ -888,7 +1030,7 @@ ShellUi.BarWidget {
                 // ==========================================
                 Item {
                     anchors.fill: parent
-                    visible: (mode === 3 || mode === 4 || mode === 5) && !isNative
+                    visible: (mode === 3 || mode === 4) && !isNative
 
                     // A. Side-by-Side (2 windows: left master, right secondary)
                     Item {
@@ -1024,26 +1166,15 @@ ShellUi.BarWidget {
                 }
 
                 // ==========================================
-                // APP PRESET INDICATOR (Mode 4: Autostart OFF [○] / Mode 5: Autostart ON [●])
+                // AUTOSTART INDICATOR (Mode 4: Autostart ON [●])
+                // Only shown when at least one app preset is defined and autostart is active
                 // ==========================================
                 Item {
-                    visible: (mode === 4 || mode === 5) && root.tilingActive
+                    visible: mode === 4 && root.tilingActive
                     x: 9.5; y: -1.5; width: 6; height: 6
 
-                    // Mode 4: Autostart OFF -> Crisp open ring (○)
+                    // Solid filled dot (●) in theme accent color
                     Rectangle {
-                        visible: mode === 4
-                        anchors.fill: parent
-                        radius: 3
-                        color: "transparent"
-                        border.width: 1.5
-                        border.color: Color.accent
-                        opacity: 0.90
-                    }
-
-                    // Mode 5: Autostart ON -> Solid filled dot (●)
-                    Rectangle {
-                        visible: mode === 5
                         anchors.centerIn: parent
                         width: 5.5
                         height: 5.5
@@ -1096,24 +1227,17 @@ ShellUi.BarWidget {
                 return "Simple Tile · 1. Disabled (Paused)\nClick for settings · Right-click to resume"
             }
             if (root.currentBarIconMode === 2) {
-                return "Simple Tile · 2. Enabled (No preset or app preset defined)\nWorkspace " + root.currentWsId + ": Native tiling\nClick for settings · Right-click to pause"
+                return "Simple Tile · 2. Enabled (No preset defined)\nWorkspace " + root.currentWsId + ": Native tiling\nClick for settings · Right-click to pause"
             }
             if (root.currentBarIconMode === 3) {
                 return "Simple Tile · 3. Enabled with defined presets\nWorkspace " + root.currentWsId + ": " + root.autoPresetLabel(root.autoPresetForWorkspace(root.currentWsId)) + " (" + root.capForWorkspace(root.currentWsId) + " windows limit)\nClick for settings · Right-click to pause"
             }
-            if (root.currentBarIconMode === 4) {
-                var appCount4 = root.savedAppsFor(root.currentWsId).length
-                var status4 = root.isWorkspaceManual(root.currentWsId)
-                    ? ("Workspace " + root.currentWsId + ": App Presets active" + (appCount4 > 0 ? " (" + appCount4 + " apps saved)" : ""))
-                    : ("Workspace " + root.currentWsId + ": Preset " + root.autoPresetLabel(root.autoPresetForWorkspace(root.currentWsId)) + " · App Preset defined")
-                return "Simple Tile · 4. Enabled with App Preset (Autostart OFF: ○ ring)\n" + status4 + "\nClick for settings · Right-click to pause"
-            }
-            // Mode 5: Autostart ON
-            var appCount5 = root.savedAppsFor(root.currentWsId).length
-            var status5 = root.isWorkspaceManual(root.currentWsId)
-                ? ("Workspace " + root.currentWsId + ": App Presets active" + (appCount5 > 0 ? " (" + appCount5 + " apps saved)" : ""))
-                : ("Workspace " + root.currentWsId + ": Preset " + root.autoPresetLabel(root.autoPresetForWorkspace(root.currentWsId)) + " · App Preset defined")
-            return "Simple Tile · 5. Enabled with App Preset (Autostart ON: ● dot)\n" + status5 + "\nClick for settings · Right-click to pause"
+            // Mode 4: Autostart ON
+            var appCount4 = root.savedAppsFor(root.currentWsId).length
+            var status4 = root.isWorkspaceManual(root.currentWsId)
+                ? ("Workspace " + root.currentWsId + ": App Presets active" + (appCount4 > 0 ? " (" + appCount4 + " apps saved)" : ""))
+                : ("Workspace " + root.currentWsId + ": " + (root.currentWsHasDefinedPreset ? ("Preset " + root.autoPresetLabel(root.autoPresetForWorkspace(root.currentWsId))) : "Native tiling") + " · App Preset autostart active")
+            return "Simple Tile · 4. Enabled with App Preset Autostart (● dot)\n" + status4 + "\nClick for settings · Right-click to pause"
         }
         onPressed: function(mouseButton) {
             if (mouseButton === Qt.RightButton) root.updateSetting("active", !root.tilingActive)
@@ -1479,7 +1603,7 @@ ShellUi.BarWidget {
                                     radius: 3
                                     color: "#121217"
                                     border.width: 1
-                                    border.color: wsCard.selected ? Color.accent : (wsCard.modelData === root.currentWsId ? Color.accent : "#2c2d38")
+                                    border.color: "#2c2d38"
                                     clip: true
 
                                     // CASE 1: Manual mode with saved windows
@@ -1768,8 +1892,8 @@ ShellUi.BarWidget {
                                             radius: 2
                                             color: "transparent"
                                             border.width: 1
-                                            border.color: Color.foreground
-                                            opacity: 0.4
+                                            border.color: "#686873"
+                                            opacity: 1.0
                                             Text {
                                                 anchors.centerIn: parent
                                                 text: "Native"
@@ -1884,28 +2008,82 @@ ShellUi.BarWidget {
                             spacing: Style.space(6)
 
                             Ui.Button {
-                                visible: root.hasCustomPreset(root.selectedWorkspace)
+                                visible: root.hasCustomPreset(root.selectedWorkspace) || root.hasCustomCap(root.selectedWorkspace) || root.isWorkspaceNative(root.selectedWorkspace)
                                 width: (parent.width - Style.space(6)) / 2
-                                text: "Reset to default"
+                                text: "↺ Reset to Default"
                                 bordered: true
                                 focusable: true
                                 fontSize: Style.font.caption
-                                onClicked: root.removeWorkspaceAutoPreset(root.selectedWorkspace)
-                                onRightClicked: root.showHint("Reset Layout Preset", "Reverts Workspace " + root.selectedWorkspace + " to the default layout preset for its window limit.", "")
-                                tooltipText: "Reset to default (" + root.autoPresetLabel(root.defaultAutoPresetFor(root.effectiveCapFor(root.selectedWorkspace))) + ")"
+                                onClicked: root.resetWorkspaceToDefault(root.selectedWorkspace)
+                                onRightClicked: root.showHint("Reset Workspace to Default", "Reverts Workspace " + root.selectedWorkspace + " to the global window limit (" + root.cap + ") and default layout preset.", "")
+                                tooltipText: "Reset to default limit (" + root.cap + ") and preset (" + root.autoPresetLabel(root.defaultAutoPresetFor(root.cap)) + ")"
                             }
 
                             Ui.Button {
-                                width: root.hasCustomPreset(root.selectedWorkspace) ? ((parent.width - Style.space(6)) / 2) : parent.width
-                                text: root.autoPresetForWorkspace(root.selectedWorkspace) === "none" ? "✓ Native (No Preset)" : "✕ No Preset (Native)"
+                                width: (root.hasCustomPreset(root.selectedWorkspace) || root.hasCustomCap(root.selectedWorkspace) || root.isWorkspaceNative(root.selectedWorkspace)) ? ((parent.width - Style.space(6)) / 2) : parent.width
+                                text: root.autoPresetForWorkspace(root.selectedWorkspace) === "none" ? "✓ Native (No Preset)" : "✕ Remove Preset (Native)"
                                 selected: root.autoPresetForWorkspace(root.selectedWorkspace) === "none"
                                 bordered: true
                                 focusable: true
                                 fontSize: Style.font.caption
                                 onClicked: root.setWorkspaceAutoPreset(root.selectedWorkspace, "none")
                                 onRightClicked: root.showHint("Native Layout (No Preset)", "Uses native Hyprland tiling without a window limit or automatic overflow. Open and close as many windows as you like.", "")
-                                tooltipText: "Native tiling on Workspace " + root.selectedWorkspace + ": no window limit or automatic overflow"
+                                tooltipText: "Remove preset on Workspace " + root.selectedWorkspace + ": native tiling, no window limit or automatic overflow"
                             }
+                        }
+
+                        // Inline Banner if App Preset exists on this workspace
+                        Rectangle {
+                            visible: root.hasSavedLayout(root.selectedWorkspace)
+                            width: parent.width
+                            implicitHeight: appPresetBannerRow.implicitHeight + Style.space(8)
+                            radius: Style.space(4)
+                            color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.12)
+                            border.width: 1
+                            border.color: Color.accent
+
+                            Row {
+                                id: appPresetBannerRow
+                                width: parent.width - Style.space(12)
+                                anchors.centerIn: parent
+                                spacing: Style.space(6)
+
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: parent.width - removeAppPresetBtn.width - Style.space(6)
+                                    text: "App Preset saved (" + root.savedAppsFor(root.selectedWorkspace).length + " apps)"
+                                    color: Color.foreground
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.caption
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                }
+
+                                Ui.Button {
+                                    id: removeAppPresetBtn
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "✕ Remove App Preset"
+                                    bordered: true
+                                    focusable: true
+                                    fontSize: Math.max(9, Style.font.caption - 1)
+                                    onClicked: root.clearWorkspaceLayout(root.selectedWorkspace)
+                                    tooltipText: "Remove saved App Preset for Workspace " + root.selectedWorkspace
+                                }
+                            }
+                        }
+
+                        // A single tiled window fills the workspace; subsequent windows overflow.
+                        Ui.Button {
+                            visible: root.effectiveCapFor(root.selectedWorkspace) === 1
+                            width: parent.width
+                            text: "□ One Window Tiling"
+                            selected: !root.isWorkspaceNative(root.selectedWorkspace)
+                            bordered: true
+                            focusable: true
+                            onClicked: root.setWorkspaceAutoPreset(root.selectedWorkspace, "side-by-side")
+                            onRightClicked: root.showHint("One Window Tiling", "Keeps one tiled window on this workspace. Newly opened windows move to the next workspace with room.", "Tip: Select Native to remove the window limit.")
+                            tooltipText: "Apply one-window tiling with automatic overflow"
+                            Accessible.name: "One window tiling"
                         }
 
                         // Presets for Cap = 2
@@ -2353,6 +2531,18 @@ ShellUi.BarWidget {
                             }
                         }
 
+                        Ui.Button {
+                            visible: root.hasSavedLayout(root.selectedWorkspace)
+                            width: parent.width
+                            text: "✕ Remove App Preset"
+                            bordered: true
+                            focusable: true
+                            fontSize: Style.font.caption
+                            onClicked: root.clearWorkspaceLayout(root.selectedWorkspace)
+                            onRightClicked: root.showHint("Remove App Preset", "Deletes the saved layout for Workspace " + root.selectedWorkspace + " and returns it to automatic Presets mode. Open windows remain open.", "")
+                            tooltipText: "Delete saved layout and return Workspace " + root.selectedWorkspace + " to Presets mode"
+                        }
+
                         // Toggles
                         Ui.Toggle {
                             width: parent.width
@@ -2380,17 +2570,6 @@ ShellUi.BarWidget {
                                 acceptedButtons: Qt.RightButton
                                 onClicked: root.showHint("Autostart on Startup", "Automatically launches this workspace's saved applications into their saved positions when you log into your desktop session.", "Tip: Set this on daily-driver workspaces for instant readiness.")
                             }
-                        }
-
-                        Ui.Button {
-                            visible: root.hasSavedLayout(root.selectedWorkspace)
-                            width: parent.width
-                            text: "Clear App Preset"
-                            bordered: true
-                            focusable: true
-                            fontSize: Style.font.caption
-                            onClicked: root.clearWorkspaceLayout(root.selectedWorkspace)
-                            onRightClicked: root.showHint("Clear App Preset", "Deletes the saved layout for Workspace " + root.selectedWorkspace + " and returns it to automatic Presets mode. Open windows remain open.", "")
                         }
                     }
                 }
@@ -2552,6 +2731,70 @@ ShellUi.BarWidget {
                         tooltipText: "Default to 4 columns side-by-side"
                     }
                 }
+
+                Rectangle {
+                    width: parent.width
+                    height: 1
+                    color: Color.foreground
+                    opacity: 0.12
+                }
+
+                Text {
+                    text: "PRESET & APP PRESET MANAGEMENT (ALL WORKSPACES)"
+                    color: Color.foreground
+                    opacity: 0.65
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
+                    font.letterSpacing: 1
+                }
+
+                Row {
+                    width: parent.width
+                    spacing: Style.space(6)
+
+                    Ui.Button {
+                        width: (parent.width - Style.space(6)) / 2
+                        text: "✕ Remove All Presets"
+                        bordered: true
+                        focusable: true
+                        fontSize: Style.font.caption
+                        onClicked: root.removeAllWorkspacePresets()
+                        onRightClicked: root.showHint("Remove All Presets", "Sets all workspaces to Native tiling without layout presets or automatic overflow.", "")
+                        tooltipText: "Set all workspaces to Native Hyprland tiling (no presets or overflow)"
+                    }
+
+                    Ui.Button {
+                        width: (parent.width - Style.space(6)) / 2
+                        text: "↺ Reset All to Default"
+                        bordered: true
+                        focusable: true
+                        fontSize: Style.font.caption
+                        onClicked: root.resetAllWorkspacesToDefault()
+                        onRightClicked: root.showHint("Reset All Workspaces", "Removes all custom limits and presets, returning every workspace to global defaults (" + root.cap + " limit, " + root.autoPresetLabel(root.defaultAutoPresetFor(root.cap)) + ").", "")
+                        tooltipText: "Reset all workspaces to global default limit and preset"
+                    }
+                }
+
+                Ui.Button {
+                    visible: root.hasAnyAppPreset
+                    width: parent.width
+                    text: "✕ Remove All App Presets"
+                    bordered: true
+                    focusable: true
+                    fontSize: Style.font.caption
+                    onClicked: root.removeAllAppPresets()
+                    onRightClicked: root.showHint("Remove All App Presets", "Deletes all saved app presets and autostart settings across all workspaces. All workspaces return to Presets mode.", "")
+                    tooltipText: "Delete all saved app presets across all workspaces"
+                }
+            }
+
+            Ui.Button {
+                width: parent.width
+                text: "Clear All Presets & App Presets"
+                bordered: true
+                focusable: true
+                onClicked: root.clearAllPresets()
+                tooltipText: "Clear all workspace layouts, limits, saved apps and autostart settings"
             }
 
             Ui.Toggle {

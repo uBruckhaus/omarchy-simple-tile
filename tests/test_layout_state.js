@@ -4,7 +4,7 @@ const vm = require('node:vm');
 const {test} = require('node:test');
 const path = require('node:path');
 const state = vm.createContext({});
-vm.runInContext(fs.readFileSync(path.join(__dirname, '../LayoutState.js'), 'utf8'), state);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '../LayoutState.js'), 'utf8').replace(/^\.pragma library\s*\n/, ''), state);
 const term = {class: 'foot', desktop_id: 'foot'};
 const browser = {class: 'chrome', desktop_id: 'chrome'};
 

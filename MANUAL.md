@@ -31,6 +31,8 @@ Simple Tile operates in two distinct modes for your workspaces:
 
 When a workspace is in Presets mode, you can select how your windows arrange themselves:
 
+- **1 window:** Select **One Window Tiling** to keep one tiled window on the workspace and route newly opened overflow windows forward.
+
 - **2 Windows**:
   - `⬌ Side-by-Side`: Two equal vertical columns (left and right).
   - `⬍ Stacked`: Two equal horizontal rows (top and bottom).
@@ -59,7 +61,7 @@ App Presets let you turn any workspace into a dedicated, persistent workstation:
 2. **Save Preset**: In the popup panel under **App Presets**, click **Save App Preset**. Simple Tile captures window coordinates, sizes, desktop entries, and commands.
 3. **Restore Preset**: Click **Restore App Preset** anytime. Simple Tile relaunches any missing applications and rebuilds their saved tile arrangement and proportions. Floating windows regain their saved position and size.
 4. **Remove Apps from Preset**: Click the `✕` on an application's chip to remove it from the preset (this does not close your open window).
-5. **Autostart on Login**: Turn on **Autostart on session startup** to launch your saved workstation automatically whenever you log into Omarchy.
+5. **Autostart on Login**: **Autostart on session startup** is enabled by default for new App Presets. Leave it enabled to launch your saved workstation automatically whenever you log into Omarchy.
 
 ---
 
@@ -117,3 +119,12 @@ Restoration supports ungrouped, non-fullscreen rectangular tiling arrangements.
 It does not restore documents, terminal commands, or browser tabs. Monitor
 geometry and gaps can affect pixel sizes. Apps that cannot open another window
 may time out; the popup reports failures so you can retry.
+
+## Clear all presets
+
+**Clear All Presets & App Presets** immediately removes all saved layouts, app lists,
+autostart settings and custom workspace limits. Every workspace returns to Native
+tiling without automatic overflow. Open apps stay open. There is no confirmation.
+
+Workspace preview frames stay gray; the small dot marks the active workspace.
+Selecting another card changes which workspace you configure.

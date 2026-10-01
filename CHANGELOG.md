@@ -1,5 +1,15 @@
 # Release notes
 
+## 0.2.5 — 2026-10-01
+
+- Add One Window Tiling for workspaces with a one-window limit, including automatic overflow.
+- Clear all layout and App Presets immediately with one button, including custom limits and autostart settings; open apps stay open.
+- Use gray workspace preview frames and a small dot to indicate the active workspace independently of configuration selection.
+- Enable autostart by default for newly saved App Presets while preserving explicit choices.
+- Treat unchanged settings as successful saves instead of showing a false warning.
+- Add workspace and global preset management controls and improve popup interaction.
+- Load the shared layout script as a QML library and adapt the JavaScript test loader.
+
 ## 0.2.4 — 2026-10-01
 
 - Enhanced bar icon with `ShellUi.BarIconButton` and 5 distinct visual states:
