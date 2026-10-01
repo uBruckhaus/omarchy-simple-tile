@@ -46,6 +46,14 @@ ShellUi.BarWidget {
     property bool showManualView: false
     onShowManualViewChanged: panelScroll.contentY = 0
 
+    Component.onCompleted: {
+        Qt.callLater(function() {
+            if (!root.tilingActive) {
+                root.updateSetting("active", true)
+            }
+        })
+    }
+
     onOpenedChanged: {
         if (opened) {
             restoreConflict = null

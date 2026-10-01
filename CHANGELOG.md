@@ -1,6 +1,14 @@
 # Release notes
 
-## 0.2.1 — 2026-09-29
+## 0.2.3 — 2026-10-01
+
+- Automatically ensures Simple Tile is enabled by default on session start and after system reboot (`Component.onCompleted` initialization).
+- Prevents temporary in-session pauses from permanently keeping the plugin disabled across reboots.
+
+## 0.2.2 — 2026-10-01
+
+- Stable popup layout dimensions and themed manual headings.
+- Full support for right-click help and keyboard navigation in settings.
 
 Includes all 0.2.0 features below. Fixes a workspace-capture test that depended
 on the developer’s desktop configuration; it now uses isolated settings and
