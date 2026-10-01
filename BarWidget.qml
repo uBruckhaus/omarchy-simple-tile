@@ -20,6 +20,34 @@ ShellUi.BarWidget {
     readonly property var workspaceAutoPresets: setting("workspaceAutoPresets", {}) || ({})
     readonly property var defaultAutoPresets: setting("defaultAutoPresets", {}) || ({ "2": "side-by-side", "3": "master-left", "4": "grid" })
     readonly property int currentWsId: (Hyprland.focusedWorkspace && Hyprland.focusedWorkspace.id > 0) ? Hyprland.focusedWorkspace.id : 1
+    readonly property bool currentWsHasDefinedPreset: {
+        if (!root.currentWsId || root.currentWsId <= 0) return false
+        if (root.isWorkspaceManual(root.currentWsId)) return false
+        if (root.isWorkspaceNative(root.currentWsId)) return false
+        var p = root.autoPresetForWorkspace(root.currentWsId)
+        return Boolean(p && p !== "none")
+    }
+    readonly property bool hasAnyAppPreset: {
+        if (!root.workspaceLayouts) return false
+        for (var k in root.workspaceLayouts) {
+            var l = root.workspaceLayouts[k]
+            if (l && ((l.apps && l.apps.length > 0) || (l.windows && l.windows.length > 0))) {
+                return true
+            }
+        }
+        return false
+    }
+    // 4 Modes:
+    // 1: Disabled
+    // 2: Enabled, no preset or app preset defined
+    // 3: Enabled with defined presets
+    // 4: Enabled and at least one app preset is defined (with green indicator)
+    readonly property int currentBarIconMode: {
+        if (!root.tilingActive) return 1
+        if (root.hasAnyAppPreset) return 4
+        if (root.currentWsHasDefinedPreset) return 3
+        return 2
+    }
     property int selectedWorkspace: 0
     property bool opened: false
     property string lastMessage: "New windows move on overflow in Presets. App Presets preserve custom layouts."
@@ -801,26 +829,248 @@ ShellUi.BarWidget {
         }
     }
 
-    ShellUi.WidgetButton {
+    Component {
+        id: tileIconComponent
+        Item {
+            anchors.fill: parent
+
+            readonly property string currentPreset: root.autoPresetForWorkspace(root.currentWsId) || root.defaultAutoPresetFor(root.effectiveCapFor(root.currentWsId))
+            readonly property bool isManual: root.isWorkspaceManual(root.currentWsId)
+            readonly property bool isNative: root.isWorkspaceNative(root.currentWsId)
+            readonly property color tileColor: root.failed ? Color.urgent : (button.active ? Color.accent : (button.foreground || Color.foreground))
+            readonly property int mode: root.currentBarIconMode
+
+            Item {
+                width: 14
+                height: 12
+                anchors.centerIn: parent
+
+                // ==========================================
+                // 1. OUTLINE TILES (Mode 1: Disabled, Mode 2: No preset defined, or Native)
+                // ==========================================
+                Item {
+                    anchors.fill: parent
+                    visible: mode === 1 || mode === 2 || (!isManual && isNative)
+
+                    Rectangle {
+                        x: 0; y: 0; width: 6; height: 12; radius: 1.5
+                        color: "transparent"
+                        border.width: 1
+                        border.color: tileColor
+                        opacity: mode === 1 ? 0.35 : 0.85
+                    }
+                    Rectangle {
+                        x: 8; y: 0; width: 6; height: 12; radius: 1.5
+                        color: "transparent"
+                        border.width: 1
+                        border.color: tileColor
+                        opacity: mode === 1 ? 0.20 : 0.50
+                    }
+                }
+
+                // ==========================================
+                // 2. FILLED PRESET TILES (Mode 3: Defined presets, Mode 4: App presets)
+                // ==========================================
+                Item {
+                    anchors.fill: parent
+                    visible: (mode === 3 || mode === 4) && !isNative
+
+                    // A. Side-by-Side (2 windows: left master, right secondary)
+                    Item {
+                        anchors.fill: parent
+                        visible: (!isManual && (currentPreset === "side-by-side" || !currentPreset)) || (isManual && (!currentPreset || currentPreset === "side-by-side"))
+                        Rectangle {
+                            x: 0; y: 0; width: 6; height: 12; radius: 1.5
+                            color: tileColor
+                            opacity: 0.95
+                        }
+                        Rectangle {
+                            x: 8; y: 0; width: 6; height: 12; radius: 1.5
+                            color: tileColor
+                            opacity: 0.55
+                        }
+                    }
+
+                    // B. Stacked (2 windows: top & bottom)
+                    Item {
+                        anchors.fill: parent
+                        visible: !isManual && currentPreset === "stacked"
+                        Rectangle {
+                            x: 0; y: 0; width: 14; height: 5; radius: 1.5
+                            color: tileColor
+                            opacity: 0.95
+                        }
+                        Rectangle {
+                            x: 0; y: 7; width: 14; height: 5; radius: 1.5
+                            color: tileColor
+                            opacity: 0.55
+                        }
+                    }
+
+                    // C. Master Left (3 or 4 windows: master left, 2 stacked right)
+                    Item {
+                        anchors.fill: parent
+                        visible: !isManual && currentPreset === "master-left"
+                        Rectangle {
+                            x: 0; y: 0; width: 8; height: 12; radius: 1.5
+                            color: tileColor
+                            opacity: 0.95
+                        }
+                        Rectangle {
+                            x: 10; y: 0; width: 4; height: 5; radius: 1.5
+                            color: tileColor
+                            opacity: 0.55
+                        }
+                        Rectangle {
+                            x: 10; y: 7; width: 4; height: 5; radius: 1.5
+                            color: tileColor
+                            opacity: 0.55
+                        }
+                    }
+
+                    // D. Master Right (3 or 4 windows: 2 stacked left, master right)
+                    Item {
+                        anchors.fill: parent
+                        visible: !isManual && currentPreset === "master-right"
+                        Rectangle {
+                            x: 0; y: 0; width: 4; height: 5; radius: 1.5
+                            color: tileColor
+                            opacity: 0.55
+                        }
+                        Rectangle {
+                            x: 0; y: 7; width: 4; height: 5; radius: 1.5
+                            color: tileColor
+                            opacity: 0.55
+                        }
+                        Rectangle {
+                            x: 6; y: 0; width: 8; height: 12; radius: 1.5
+                            color: tileColor
+                            opacity: 0.95
+                        }
+                    }
+
+                    // E. Grid (4 windows: 2x2 quadrants)
+                    Item {
+                        anchors.fill: parent
+                        visible: !isManual && currentPreset === "grid"
+                        Rectangle {
+                            x: 0; y: 0; width: 6; height: 5; radius: 1.5
+                            color: tileColor
+                            opacity: 0.95
+                        }
+                        Rectangle {
+                            x: 8; y: 0; width: 6; height: 5; radius: 1.5
+                            color: tileColor
+                            opacity: 0.55
+                        }
+                        Rectangle {
+                            x: 0; y: 7; width: 6; height: 5; radius: 1.5
+                            color: tileColor
+                            opacity: 0.55
+                        }
+                        Rectangle {
+                            x: 8; y: 7; width: 6; height: 5; radius: 1.5
+                            color: tileColor
+                            opacity: 0.55
+                        }
+                    }
+
+                    // F. Columns (3 or 4 windows: vertical strips)
+                    Item {
+                        anchors.fill: parent
+                        visible: !isManual && currentPreset === "columns"
+                        Rectangle {
+                            x: 0; y: 0; width: 3; height: 12; radius: 1
+                            color: tileColor
+                            opacity: 0.95
+                        }
+                        Rectangle {
+                            x: 5; y: 0; width: 4; height: 12; radius: 1
+                            color: tileColor
+                            opacity: 0.55
+                        }
+                        Rectangle {
+                            x: 11; y: 0; width: 3; height: 12; radius: 1
+                            color: tileColor
+                            opacity: 0.55
+                        }
+                    }
+                }
+
+                // ==========================================
+                // MODE 1: PAUSE BARS (When disabled)
+                // ==========================================
+                Item {
+                    visible: mode === 1
+                    anchors.centerIn: parent
+                    width: 5; height: 6
+                    Rectangle { x: 0; y: 0; width: 1.5; height: 6; radius: 0.5; color: Color.urgent }
+                    Rectangle { x: 3.5; y: 0; width: 1.5; height: 6; radius: 0.5; color: Color.urgent }
+                }
+
+                // ==========================================
+                // MODE 4: GREEN INDICATOR (At least one App Preset is defined)
+                // ==========================================
+                Rectangle {
+                    visible: mode === 4 && root.tilingActive
+                    x: 10; y: -1; width: 5; height: 5; radius: 2.5
+                    color: "#22c55e"
+                    border.width: 1
+                    border.color: Color.background
+
+                    // Subtle halo when the active workspace is in App Presets mode
+                    Rectangle {
+                        visible: root.isWorkspaceManual(root.currentWsId)
+                        anchors.centerIn: parent
+                        width: parent.width + 2
+                        height: parent.height + 2
+                        radius: width / 2
+                        color: "transparent"
+                        border.width: 1
+                        border.color: "#86efac"
+                        opacity: 0.75
+                    }
+                }
+
+                // Failure badge (exclamation point)
+                Rectangle {
+                    visible: root.failed
+                    x: 9; y: -1; width: 6; height: 6; radius: 3
+                    color: Color.urgent
+                    Text {
+                        anchors.centerIn: parent
+                        text: "!"
+                        color: "#ffffff"
+                        font.pixelSize: 5
+                        font.bold: true
+                    }
+                }
+            }
+        }
+    }
+
+    ShellUi.BarIconButton {
         id: button
         anchors.fill: parent
         bar: root.bar
-        text: root.failed ? "▦ !" : "▦"
-        fontSize: Style.font.icon
-        active: root.failed
+        iconComponent: tileIconComponent
+        active: root.failed || root.opened
         dimmed: !root.tilingActive
         tooltipText: {
-            if (!root.tilingActive) return "Simple Tile · Paused\nClick for settings · Right-click to resume"
-            if (root.isWorkspaceManual(root.currentWsId)) {
-                return "Simple Tile · Workspace " + root.currentWsId + ": App Presets\nClick for settings · Right-click to pause"
+            if (root.currentBarIconMode === 1) {
+                return "Simple Tile · 1. Disabled (Paused)\nClick for settings · Right-click to resume"
             }
-            if (root.isWorkspaceNative(root.currentWsId)) {
-                return "Simple Tile · Workspace " + root.currentWsId + ": Native · No window limit\nClick for settings · Right-click to pause"
+            if (root.currentBarIconMode === 2) {
+                return "Simple Tile · 2. Enabled (No preset or app preset defined)\nWorkspace " + root.currentWsId + ": Native tiling\nClick for settings · Right-click to pause"
             }
-            if (root.activeWsCustom) {
-                return "Simple Tile · Workspace " + root.currentWsId + ": " + root.activeWsCap + " windows (custom, default: " + root.cap + ")\nClick for settings · Right-click to pause"
+            if (root.currentBarIconMode === 3) {
+                return "Simple Tile · 3. Enabled with defined presets\nWorkspace " + root.currentWsId + ": " + root.autoPresetLabel(root.autoPresetForWorkspace(root.currentWsId)) + " (" + root.capForWorkspace(root.currentWsId) + " windows limit)\nClick for settings · Right-click to pause"
             }
-            return "Simple Tile · Workspace " + root.currentWsId + ": " + root.cap + " windows per workspace\nClick for settings · Right-click to pause"
+            var appCount = root.savedAppsFor(root.currentWsId).length
+            var status = root.isWorkspaceManual(root.currentWsId)
+                ? ("Workspace " + root.currentWsId + ": App Presets active" + (appCount > 0 ? " (" + appCount + " apps saved)" : ""))
+                : ("Workspace " + root.currentWsId + ": Preset " + root.autoPresetLabel(root.autoPresetForWorkspace(root.currentWsId)) + " · App Preset defined")
+            return "Simple Tile · 4. Enabled with App Preset (Green indicator)\n" + status + "\nClick for settings · Right-click to pause"
         }
         onPressed: function(mouseButton) {
             if (mouseButton === Qt.RightButton) root.updateSetting("active", !root.tilingActive)
