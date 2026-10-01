@@ -1,5 +1,16 @@
 # Release notes
 
+## 0.2.4 — 2026-10-01
+
+- Enhanced bar icon with `ShellUi.BarIconButton` and 5 distinct visual states:
+  1. **Disabled**: Dimmed outline tiles with pause bars (`||`).
+  2. **Enabled (no preset or app preset defined)**: Clean neutral outline tiles.
+  3. **Enabled with defined presets**: Solid filled geometry tiles representing the active layout.
+  4. **Enabled with App Preset (Autostart OFF)**: Layout tiles with an open ring indicator (`○`) in dynamic theme accent color.
+  5. **Enabled with App Preset (Autostart ON)**: Layout tiles with a solid filled dot indicator (`●`) in dynamic theme accent color.
+- Automatically ensures Simple Tile is enabled by default on session start and after system reboot.
+- Comprehensive tooltips reflecting the active icon mode and autostart state.
+
 ## 0.2.3 — 2026-10-01
 
 - Automatically ensures Simple Tile is enabled by default on session start and after system reboot (`Component.onCompleted` initialization).

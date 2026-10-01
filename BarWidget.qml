@@ -37,14 +37,29 @@ ShellUi.BarWidget {
         }
         return false
     }
-    // 4 Modes:
+    readonly property bool hasAnyAutostart: {
+        if (!root.workspaceLayouts) return false
+        for (var ak in root.workspaceLayouts) {
+            var al = root.workspaceLayouts[ak]
+            if (al && al.autostart === true) return true
+        }
+        return false
+    }
+    readonly property bool hasAutostartActive: {
+        if (root.isWorkspaceManual(root.currentWsId)) {
+            return root.workspaceAutostart(root.currentWsId)
+        }
+        return root.hasAnyAutostart
+    }
+    // Bar Icon Modes:
     // 1: Disabled
     // 2: Enabled, no preset or app preset defined
     // 3: Enabled with defined presets
-    // 4: Enabled and at least one app preset is defined (with theme accent indicator)
+    // 4: Enabled, App Preset defined, Autostart OFF (open ring ○ indicator)
+    // 5: Enabled, App Preset defined, Autostart ON (solid dot ● indicator)
     readonly property int currentBarIconMode: {
         if (!root.tilingActive) return 1
-        if (root.hasAnyAppPreset) return 4
+        if (root.hasAnyAppPreset) return root.hasAutostartActive ? 5 : 4
         if (root.currentWsHasDefinedPreset) return 3
         return 2
     }
@@ -873,7 +888,7 @@ ShellUi.BarWidget {
                 // ==========================================
                 Item {
                     anchors.fill: parent
-                    visible: (mode === 3 || mode === 4) && !isNative
+                    visible: (mode === 3 || mode === 4 || mode === 5) && !isNative
 
                     // A. Side-by-Side (2 windows: left master, right secondary)
                     Item {
@@ -1009,26 +1024,46 @@ ShellUi.BarWidget {
                 }
 
                 // ==========================================
-                // MODE 4: APP PRESET INDICATOR (At least one App Preset is defined)
+                // APP PRESET INDICATOR (Mode 4: Autostart OFF [○] / Mode 5: Autostart ON [●])
                 // ==========================================
-                Rectangle {
-                    visible: mode === 4 && root.tilingActive
-                    x: 10; y: -1; width: 5; height: 5; radius: 2.5
-                    color: Color.accent
-                    border.width: 1
-                    border.color: Color.background
+                Item {
+                    visible: (mode === 4 || mode === 5) && root.tilingActive
+                    x: 9.5; y: -1.5; width: 6; height: 6
 
-                    // Subtle halo when the active workspace is in App Presets mode
+                    // Mode 4: Autostart OFF -> Crisp open ring (○)
                     Rectangle {
-                        visible: root.isWorkspaceManual(root.currentWsId)
-                        anchors.centerIn: parent
-                        width: parent.width + 2
-                        height: parent.height + 2
-                        radius: width / 2
+                        visible: mode === 4
+                        anchors.fill: parent
+                        radius: 3
                         color: "transparent"
-                        border.width: 1
+                        border.width: 1.5
                         border.color: Color.accent
-                        opacity: 0.75
+                        opacity: 0.90
+                    }
+
+                    // Mode 5: Autostart ON -> Solid filled dot (●)
+                    Rectangle {
+                        visible: mode === 5
+                        anchors.centerIn: parent
+                        width: 5.5
+                        height: 5.5
+                        radius: 2.75
+                        color: Color.accent
+                        border.width: 1
+                        border.color: Color.background
+
+                        // Subtle outer halo when on the active app preset workspace
+                        Rectangle {
+                            visible: root.isWorkspaceManual(root.currentWsId)
+                            anchors.centerIn: parent
+                            width: parent.width + 3
+                            height: parent.height + 3
+                            radius: width / 2
+                            color: "transparent"
+                            border.width: 1
+                            border.color: Color.accent
+                            opacity: 0.60
+                        }
                     }
                 }
 
@@ -1066,11 +1101,19 @@ ShellUi.BarWidget {
             if (root.currentBarIconMode === 3) {
                 return "Simple Tile · 3. Enabled with defined presets\nWorkspace " + root.currentWsId + ": " + root.autoPresetLabel(root.autoPresetForWorkspace(root.currentWsId)) + " (" + root.capForWorkspace(root.currentWsId) + " windows limit)\nClick for settings · Right-click to pause"
             }
-            var appCount = root.savedAppsFor(root.currentWsId).length
-            var status = root.isWorkspaceManual(root.currentWsId)
-                ? ("Workspace " + root.currentWsId + ": App Presets active" + (appCount > 0 ? " (" + appCount + " apps saved)" : ""))
+            if (root.currentBarIconMode === 4) {
+                var appCount4 = root.savedAppsFor(root.currentWsId).length
+                var status4 = root.isWorkspaceManual(root.currentWsId)
+                    ? ("Workspace " + root.currentWsId + ": App Presets active" + (appCount4 > 0 ? " (" + appCount4 + " apps saved)" : ""))
+                    : ("Workspace " + root.currentWsId + ": Preset " + root.autoPresetLabel(root.autoPresetForWorkspace(root.currentWsId)) + " · App Preset defined")
+                return "Simple Tile · 4. Enabled with App Preset (Autostart OFF: ○ ring)\n" + status4 + "\nClick for settings · Right-click to pause"
+            }
+            // Mode 5: Autostart ON
+            var appCount5 = root.savedAppsFor(root.currentWsId).length
+            var status5 = root.isWorkspaceManual(root.currentWsId)
+                ? ("Workspace " + root.currentWsId + ": App Presets active" + (appCount5 > 0 ? " (" + appCount5 + " apps saved)" : ""))
                 : ("Workspace " + root.currentWsId + ": Preset " + root.autoPresetLabel(root.autoPresetForWorkspace(root.currentWsId)) + " · App Preset defined")
-            return "Simple Tile · 4. Enabled with App Preset (Theme accent indicator)\n" + status + "\nClick for settings · Right-click to pause"
+            return "Simple Tile · 5. Enabled with App Preset (Autostart ON: ● dot)\n" + status5 + "\nClick for settings · Right-click to pause"
         }
         onPressed: function(mouseButton) {
             if (mouseButton === Qt.RightButton) root.updateSetting("active", !root.tilingActive)
