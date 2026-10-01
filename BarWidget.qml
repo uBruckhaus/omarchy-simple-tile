@@ -41,7 +41,7 @@ ShellUi.BarWidget {
     // 1: Disabled
     // 2: Enabled, no preset or app preset defined
     // 3: Enabled with defined presets
-    // 4: Enabled and at least one app preset is defined (with green indicator)
+    // 4: Enabled and at least one app preset is defined (with theme accent indicator)
     readonly property int currentBarIconMode: {
         if (!root.tilingActive) return 1
         if (root.hasAnyAppPreset) return 4
@@ -1009,12 +1009,12 @@ ShellUi.BarWidget {
                 }
 
                 // ==========================================
-                // MODE 4: GREEN INDICATOR (At least one App Preset is defined)
+                // MODE 4: APP PRESET INDICATOR (At least one App Preset is defined)
                 // ==========================================
                 Rectangle {
                     visible: mode === 4 && root.tilingActive
                     x: 10; y: -1; width: 5; height: 5; radius: 2.5
-                    color: "#22c55e"
+                    color: Color.accent
                     border.width: 1
                     border.color: Color.background
 
@@ -1027,7 +1027,7 @@ ShellUi.BarWidget {
                         radius: width / 2
                         color: "transparent"
                         border.width: 1
-                        border.color: "#86efac"
+                        border.color: Color.accent
                         opacity: 0.75
                     }
                 }
@@ -1070,7 +1070,7 @@ ShellUi.BarWidget {
             var status = root.isWorkspaceManual(root.currentWsId)
                 ? ("Workspace " + root.currentWsId + ": App Presets active" + (appCount > 0 ? " (" + appCount + " apps saved)" : ""))
                 : ("Workspace " + root.currentWsId + ": Preset " + root.autoPresetLabel(root.autoPresetForWorkspace(root.currentWsId)) + " · App Preset defined")
-            return "Simple Tile · 4. Enabled with App Preset (Green indicator)\n" + status + "\nClick for settings · Right-click to pause"
+            return "Simple Tile · 4. Enabled with App Preset (Theme accent indicator)\n" + status + "\nClick for settings · Right-click to pause"
         }
         onPressed: function(mouseButton) {
             if (mouseButton === Qt.RightButton) root.updateSetting("active", !root.tilingActive)
