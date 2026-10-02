@@ -32,7 +32,7 @@ pixel sizes, and apps that cannot open another window may time out.
 ## Listing metadata
 
 - Plugin ID: `ubruckhaus.simple-tile`
-- Version: `0.2.5`
+- Version: `0.2.6`
 - Author: Uwe Bruckhaus
 - Category: Desktop
 - Tags: workspaces, hyprland, bar

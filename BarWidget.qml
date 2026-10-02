@@ -2296,6 +2296,7 @@ ShellUi.BarWidget {
                                                     width: Math.max(0, chipRect.width - chipRect.fixedWidth)
                                                     elide: Text.ElideRight
                                                     anchors.verticalCenter: parent.verticalCenter
+                                                    textFormat: Text.PlainText
                                                     text: chipRect.modelData.name || chipRect.modelData.class || "App"
                                                     color: chipRect.isMissing ? Color.urgent : Color.foreground
                                                     font.family: Style.font.family
@@ -2340,6 +2341,7 @@ ShellUi.BarWidget {
                                     visible: failureText !== ""
                                     width: parent.width
                                     wrapMode: Text.Wrap
+                                    textFormat: Text.PlainText
                                     text: "Last restore failed:\n" + failureText + "\nOpen the app manually and try Restore App Preset again. The × removes it from the saved preset."
                                     color: Color.urgent
                                     font.family: Style.font.family
@@ -2421,6 +2423,7 @@ ShellUi.BarWidget {
                                                 id: conflictTxt
                                                 anchors.centerIn: parent
                                                 width: parent.width - Style.space(8)
+                                                textFormat: Text.PlainText
                                                 text: modelData.title ? (modelData.class + " (" + modelData.title + ")") : (modelData.class || "Window")
                                                 elide: Text.ElideMiddle
                                                 color: Color.foreground
@@ -2827,6 +2830,7 @@ ShellUi.BarWidget {
 
             Text {
                 width: parent.width
+                textFormat: Text.PlainText
                 text: root.failed ? root.lastMessage : (root.tilingActive ? root.lastMessage : "Your windows stay where you put them.")
                 wrapMode: Text.Wrap
                 color: root.failed ? Color.urgent : Color.foreground

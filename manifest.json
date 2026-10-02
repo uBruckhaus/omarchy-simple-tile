@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "ubruckhaus.simple-tile",
   "name": "Simple Tile",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "author": "Uwe Bruckhaus",
   "license": "MIT",
   "description": "Give your windows room. Workspace limits, layout presets, and saved app workspaces with restore and session autostart.",

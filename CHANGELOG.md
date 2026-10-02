@@ -1,5 +1,10 @@
 # Release notes
 
+## 0.2.6 — 2026-10-02
+
+- Render restore-conflict window titles as plain text so webpage title markup cannot load remote images.
+- Render saved app names and restore failure/status messages as plain text as well.
+
 ## 0.2.5 — 2026-10-01
 
 - Add One Window Tiling for workspaces with a one-window limit, including automatic overflow.
