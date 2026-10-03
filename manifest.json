@@ -5,7 +5,7 @@
   "version": "0.2.6",
   "author": "Uwe Bruckhaus",
   "license": "MIT",
-  "description": "Give your windows room. Workspace limits, layout presets, and saved app workspaces with restore and session autostart.",
+  "description": "Choose visual tiling layouts or save your own app workspaces. Restore apps and window arrangements, enable login autostart, and manage overflow with per-workspace window limits.",
   "homepage": "https://github.com/uBruckhaus/omarchy-simple-tile",
   "repository": "https://github.com/uBruckhaus/omarchy-simple-tile",
   "keywords": [

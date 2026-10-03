@@ -1,6 +1,8 @@
 # Simple Tile — marketplace description
 
-**Give your windows room. Make every workspace your own.**
+**Visual tiling layouts and saved app workspaces, right from your bar.**
+
+![Actual Simple Tile widget with App Presets and restore controls](preview.png)
 
 Simple Tile brings comfortable tiling and repeatable workspaces to your Omarchy
 bar. Choose how many windows belong together, pick a layout, and let newly
@@ -21,7 +23,7 @@ optional session autostart brings your saved workspaces back after login.
   or cancel. Enable auto-move for quicker repeat restores.
 - **Workspace protection:** App Preset workspaces are excluded from automatic
   overflow routing, including saved workspaces that are not currently open.
-- **Native controls:** theme-aware workspace cards, right-click help, and
+- **Native controls:** visual workspace cards, right-click help, and
   instant pause/resume from the bar.
 
 Restoration supports ungrouped, non-fullscreen rectangular tiled arrangements

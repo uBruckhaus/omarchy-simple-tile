@@ -9,6 +9,8 @@ workspaces to your Omarchy bar. Keep everyday windows comfortably tiled, or
 save a workspace for coding, research, and communication and bring it back
 when you need it.
 
+![Simple Tile widget showing saved app workspaces, layout cards, restore controls, and session autostart](preview.png)
+
 - **Room to focus:** set a limit of 1–4 windows globally or per workspace.
   New overflow windows move forward to a workspace with room; focus follows.
 - **Layouts at a click:** side-by-side, stacked, master-left, master-right,
@@ -19,7 +21,7 @@ when you need it.
   floating, or cancel. Optional auto-move makes repeat restores quicker.
 - **Ready after login:** optionally restore saved workspaces once per
   Hyprland session.
-- **At home in Omarchy:** theme-aware controls, workspace cards, contextual
+- **At home in Omarchy:** native controls, workspace cards, contextual
   right-click help, and a right-click pause button on the bar.
 
 See the [user manual](MANUAL.md) for controls and workflows, and the
