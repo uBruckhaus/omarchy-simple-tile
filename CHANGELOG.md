@@ -1,5 +1,10 @@
 # Release notes
 
+## 0.2.7 — 2026-10-04
+
+- Rebuild the preview image from real screenshots of the Presets and App Presets tabs.
+- Lead the manifest, README and marketplace descriptions with Presets and App Presets.
+
 ## 0.2.6 — 2026-10-02
 
 - Render restore-conflict window titles as plain text so webpage title markup cannot load remote images.

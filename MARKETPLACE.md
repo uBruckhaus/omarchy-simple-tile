@@ -1,8 +1,8 @@
 # Simple Tile — marketplace description
 
-**Visual tiling layouts and saved app workspaces, right from your bar.**
+**Presets and App Presets for every workspace, right from your bar.**
 
-![Actual Simple Tile widget with App Presets and restore controls](preview.png)
+![Simple Tile popup showing the Presets and App Presets tabs](preview.png)
 
 Simple Tile brings comfortable tiling and repeatable workspaces to your Omarchy
 bar. Choose how many windows belong together, pick a layout, and let newly
@@ -34,7 +34,7 @@ pixel sizes, and apps that cannot open another window may time out.
 ## Listing metadata
 
 - Plugin ID: `ubruckhaus.simple-tile`
-- Version: `0.2.6`
+- Version: `0.2.7`
 - Author: Uwe Bruckhaus
 - Category: Desktop
 - Tags: workspaces, hyprland, bar

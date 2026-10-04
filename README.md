@@ -2,14 +2,16 @@
 
 ![Simple Tile — a little room to focus](docs/banner.svg)
 
-**Give your windows room. Make every workspace your own.**
+**Presets and App Presets for every workspace, right from your Omarchy bar.**
 
-Simple Tile brings workspace limits, visual layout presets, and saved app
-workspaces to your Omarchy bar. Keep everyday windows comfortably tiled, or
-save a workspace for coding, research, and communication and bring it back
-when you need it.
+- **Presets** give a workspace a window limit (1–4) and a tiling layout:
+  side-by-side, stacked, master left or right, columns, or a 2×2 grid. New
+  windows that don't fit move on to the next workspace with room.
+- **App Presets** save the apps on a workspace and how they are arranged.
+  Restore opens any missing apps and rebuilds the layout, with one click or
+  automatically after login.
 
-![Simple Tile widget showing saved app workspaces, layout cards, restore controls, and session autostart](preview.png)
+![Simple Tile popup showing the Presets tab with layout choices and the App Presets tab with saved apps](preview.png)
 
 - **Room to focus:** set a limit of 1–4 windows globally or per workspace.
   New overflow windows move forward to a workspace with room; focus follows.
@@ -31,7 +33,7 @@ See the [user manual](MANUAL.md) for controls and workflows, and the
 
 Requires **Omarchy with the Quickshell plugin system**, Python 3.10+, and
 **Hyprland 0.56.2 with its Lua dispatch API**. Older Waybar-based Omarchy
-installations are not supported. This is an early `0.2.6` release.
+installations are not supported. This is an early `0.2.7` release.
 App launching uses saved argument lists or `uwsm-app` for desktop files;
 PyGObject/GioUnix is an optional fallback. No pip installation is required.
 
