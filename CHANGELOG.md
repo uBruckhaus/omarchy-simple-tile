@@ -4,6 +4,7 @@
 
 - Rebuild the preview image from real screenshots of the Presets and App Presets tabs.
 - Lead the manifest, README and marketplace descriptions with Presets and App Presets.
+- Keep the three layout buttons for a 3-window workspace inside the panel; the last one ("Columns") ran past its right edge.
 
 ## 0.2.6 — 2026-10-02
 

@@ -2117,9 +2117,9 @@ ShellUi.BarWidget {
                         Row {
                             visible: root.effectiveCapFor(root.selectedWorkspace) === 3
                             width: parent.width
-                            spacing: Style.space(12)
+                            spacing: Style.space(6)
                             Ui.Button {
-                                width: (parent.width - Style.space(12)) / 3
+                                width: (parent.width - 2 * Style.space(6)) / 3
                                 text: "◨ Master L"
                                 selected: root.autoPresetForWorkspace(root.selectedWorkspace) === "master-left"
                                 bordered: true
@@ -2129,7 +2129,7 @@ ShellUi.BarWidget {
                                 tooltipText: "1 master on left, 2 stacked on right. Click again or Reset to remove preset."
                             }
                             Ui.Button {
-                                width: (parent.width - Style.space(12)) / 3
+                                width: (parent.width - 2 * Style.space(6)) / 3
                                 text: "◧ Master R"
                                 selected: root.autoPresetForWorkspace(root.selectedWorkspace) === "master-right"
                                 bordered: true
@@ -2139,7 +2139,7 @@ ShellUi.BarWidget {
                                 tooltipText: "2 stacked on left, 1 master on right. Click again or Reset to remove preset."
                             }
                             Ui.Button {
-                                width: (parent.width - Style.space(12)) / 3
+                                width: (parent.width - 2 * Style.space(6)) / 3
                                 text: "||| Columns"
                                 selected: root.autoPresetForWorkspace(root.selectedWorkspace) === "columns"
                                 bordered: true
