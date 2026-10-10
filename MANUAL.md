@@ -1,19 +1,19 @@
-# Simple Tile — User Manual
+# Workspace Presets — User Manual
 
-Simple Tile provides smart, calm window management for Hyprland on Omarchy. It prevents workspaces from becoming cluttered by giving your windows room to focus.
+Workspace Presets provides smart, calm window management for Hyprland on Omarchy. It prevents workspaces from becoming cluttered by giving your windows room to focus.
 
 ---
 
 ## 1. Core Concepts
 
-Simple Tile operates in two distinct modes for your workspaces:
+Workspace Presets operates in two distinct modes for your workspaces:
 
 | Mode | Purpose | Window Overflow Behavior |
 | :--- | :--- | :--- |
 | **Presets** *(Automatic)* | Dynamic daily workflow with geometric layouts. | When the window limit is reached, newly opened windows **automatically move** to the next free workspace. |
 | **App Presets** *(Manual)* | Dedicated app suites (e.g. coding, communications, media). | **Automatic moves are disabled**. Saved layouts are retained until you save again; restore rebuilds supported arrangements. |
 
-> **User Precedence**: Manually moving windows with keybindings (e.g. `Super+Shift+2`) intentionally overrides window limits. Simple Tile only routes *newly launched* windows on overflow and always follows the moved window to its new workspace.
+> **User Precedence**: Manually moving windows with keybindings (e.g. `Super+Shift+2`) intentionally overrides window limits. Workspace Presets only routes *newly launched* windows on overflow and always follows the moved window to its new workspace.
 
 ---
 
@@ -58,8 +58,8 @@ Click **Presets** to resume the configured geometric layout (or the default) and
 App Presets let you turn any workspace into a dedicated, persistent workstation:
 
 1. **Arrange your Apps**: Open your desired applications and position them on the workspace (tiled or floating).
-2. **Save Preset**: In the popup panel under **App Presets**, click **Save App Preset**. Simple Tile captures window coordinates, sizes, desktop entries, and commands.
-3. **Restore Preset**: Click **Restore App Preset** anytime. Simple Tile relaunches any missing applications and rebuilds their saved tile arrangement and proportions. Floating windows regain their saved position and size.
+2. **Save Preset**: In the popup panel under **App Presets**, click **Save App Preset**. Workspace Presets captures window coordinates, sizes, desktop entries, and commands.
+3. **Restore Preset**: Click **Restore App Preset** anytime. Workspace Presets relaunches any missing applications and rebuilds their saved tile arrangement and proportions. Floating windows regain their saved position and size.
 4. **Remove Apps from Preset**: Click the `✕` on an application's chip to remove it from the preset (this does not close your open window).
 5. **Autostart on Login**: **Autostart on session startup** is enabled by default for new App Presets. Leave it enabled to launch your saved workstation automatically whenever you log into Omarchy.
 
@@ -67,7 +67,7 @@ App Presets let you turn any workspace into a dedicated, persistent workstation:
 
 ## 5. Conflict Resolution on Restore
 
-When you click **Restore App Preset** on a workspace that already has open windows, Simple Tile detects extraneous windows that are not part of the saved preset. You are presented with clear choices:
+When you click **Restore App Preset** on a workspace that already has open windows, Workspace Presets detects extraneous windows that are not part of the saved preset. You are presented with clear choices:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -99,7 +99,7 @@ When you click **Restore App Preset** on a workspace that already has open windo
 
 ## 6. Right-Click Help & Handling Hints
 
-Every button and control in Simple Tile supports contextual right-click assistance:
+Every button and control in Workspace Presets supports contextual right-click assistance:
 
 - **Right-Click Any Control**: Workspace cards, tab buttons, window limit caps, layout presets, save/restore buttons, and options display a guidance card explaining what the control does, when to use it, and helpful workflow tips.
 - **Dismissing Hints**: Click the `✕` button on the hint card to dismiss it.
@@ -109,7 +109,7 @@ Every button and control in Simple Tile supports contextual right-click assistan
 
 ## 7. Bar Widget & Shortcuts
 
-- **Left-Click Bar Icon**: Opens or closes the Simple Tile settings panel.
+- **Left-Click Bar Icon**: Opens or closes the Workspace Presets settings panel.
 - **Right-Click Bar Icon**: Instantly pauses or resumes automatic tiling without opening the panel.
 - **Escape**: Closes the popup panel.
 

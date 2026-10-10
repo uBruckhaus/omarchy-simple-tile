@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
-  <title id="title">Simple Tile</title>
+  <title id="title">Workspace Presets</title>
   <desc id="desc">A little room to focus. Two windows on one workspace, with the next window moving to another.</desc>
   <rect width="1200" height="360" rx="24" fill="#151a23"/>
   <g font-family="system-ui, sans-serif">
     <text x="64" y="83" font-size="15" letter-spacing="3" fill="#99adca">AN OMARCHY PLUGIN</text>
-    <text x="60" y="165" font-size="64" font-weight="700" fill="#edf1f7">Simple Tile</text>
+    <text x="60" y="165" font-size="54" font-weight="700" fill="#edf1f7">Workspace Presets</text>
     <text x="64" y="212" font-size="25" fill="#aebbd0">A little room to focus.</text>
     <rect x="64" y="263" width="230" height="36" rx="18" fill="#24364c"/>
     <text x="179" y="287" text-anchor="middle" font-size="14" fill="#b6dbff">YOUR WINDOWS. YOUR PACE.</text>

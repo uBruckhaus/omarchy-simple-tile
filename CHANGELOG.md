@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.2.8 — 2026-10-10
+
+- Simple Tile is now called **Workspace Presets**: it does more than tiling (window limits, layouts and App Presets). The plugin ID, install path and saved settings stay the same.
+
 ## 0.2.7 — 2026-10-04
 
 - Rebuild the preview image from real screenshots of the Presets and App Presets tabs.

@@ -1,6 +1,6 @@
-# Simple Tile
+# Workspace Presets
 
-![Simple Tile — a little room to focus](docs/banner.svg)
+![Workspace Presets — a little room to focus](docs/banner.svg)
 
 **Presets and App Presets for every workspace, right from your Omarchy bar.**
 
@@ -11,7 +11,7 @@
   Restore opens any missing apps and rebuilds the layout, with one click or
   automatically after login.
 
-![Simple Tile popup showing the Presets tab with layout choices and the App Presets tab with saved apps](preview.png)
+![Workspace Presets popup showing the Presets tab with layout choices and the App Presets tab with saved apps](preview.png)
 
 - **Room to focus:** set a limit of 1–4 windows globally or per workspace.
   New overflow windows move forward to a workspace with room; focus follows.
@@ -27,13 +27,13 @@
   right-click help, and a right-click pause button on the bar.
 
 See the [user manual](MANUAL.md) for controls and workflows, and the
-[0.2.6 release notes](CHANGELOG.md) for what changed.
+[0.2.8 release notes](CHANGELOG.md) for what changed.
 
 ## Install
 
 Requires **Omarchy with the Quickshell plugin system**, Python 3.10+, and
 **Hyprland 0.56.2 with its Lua dispatch API**. Older Waybar-based Omarchy
-installations are not supported. This is an early `0.2.7` release.
+installations are not supported. This is an early `0.2.8` release.
 App launching uses saved argument lists or `uwsm-app` for desktop files;
 PyGObject/GioUnix is an optional fallback. No pip installation is required.
 
@@ -62,10 +62,10 @@ geometric preset can rearrange the current workspace.
 **Manual moves override the limit:** Manually moving a window to another
 workspace (for example, using `Super+Shift+2` or dragging) intentionally
 overrides the workspace window limit without being redirected. This is fully
-intended: Simple Tile manages incoming overflow when windows first open,
+intended: Workspace Presets manages incoming overflow when windows first open,
 but always respects your manual arrangements and never fights your manual moves.
 
-Simple Tile scans higher-numbered workspaces on the source monitor for room.
+Workspace Presets scans higher-numbered workspaces on the source monitor for room.
 Each workspace respects either its specific limit or the global default limit.
 If candidate workspaces on that monitor are full, it chooses a new number after
 that monitor's highest workspace, skipping IDs already used on other monitors.
@@ -79,9 +79,9 @@ slots; tabbed/grouped layouts are deliberately not automatically redistributed.
 
 ## Presets vs App Presets
 
-Simple Tile supports two modes for your workspaces:
+Workspace Presets supports two modes for your workspaces:
 
-- **Presets (Default):** Set a window limit (1–4 windows) globally or per workspace, and choose from geometric layout presets (Side-by-Side, Stacked, Master-Left, Master-Right, Columns, 2×2 Grid, or Native). When a new window opens and exceeds the limit, Simple Tile automatically moves it to the next workspace on your monitor.
+- **Presets (Default):** Set a window limit (1–4 windows) globally or per workspace, and choose from geometric layout presets (Side-by-Side, Stacked, Master-Left, Master-Right, Columns, 2×2 Grid, or Native). When a new window opens and exceeds the limit, Workspace Presets automatically moves it to the next workspace on your monitor.
 - **App Presets:** Select any workspace, open and arrange your apps according to your preferences, then click **Save App Preset**:
   - **Layout Snapshots:** Captures window geometry, count, and arrangement.
   - **App Icons:** Optionally save the opened applications and display their real application icons directly inside the workspace card in the bar popup.

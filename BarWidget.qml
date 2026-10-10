@@ -842,7 +842,7 @@ ShellUi.BarWidget {
                     if (root.failed) root.lastMessage = "Could not move the window. Check the shell log."
                     else if (result.status === "moved") root.lastMessage = "Last move: workspace " + result.source + " → " + result.target
                     else if (result.status === "manual") root.lastMessage = "Workspace " + result.workspace + " is using App Presets."
-                    if (root.failed) console.warn("Simple Tile:", result.message)
+                    if (root.failed) console.warn("Workspace Presets:", result.message)
                 } catch (error) {
                     root.failed = true
                     root.lastMessage = "The window helper returned an invalid response."
@@ -1224,20 +1224,20 @@ ShellUi.BarWidget {
         dimmed: !root.tilingActive
         tooltipText: {
             if (root.currentBarIconMode === 1) {
-                return "Simple Tile · 1. Disabled (Paused)\nClick for settings · Right-click to resume"
+                return "Workspace Presets · 1. Disabled (Paused)\nClick for settings · Right-click to resume"
             }
             if (root.currentBarIconMode === 2) {
-                return "Simple Tile · 2. Enabled (No preset defined)\nWorkspace " + root.currentWsId + ": Native tiling\nClick for settings · Right-click to pause"
+                return "Workspace Presets · 2. Enabled (No preset defined)\nWorkspace " + root.currentWsId + ": Native tiling\nClick for settings · Right-click to pause"
             }
             if (root.currentBarIconMode === 3) {
-                return "Simple Tile · 3. Enabled with defined presets\nWorkspace " + root.currentWsId + ": " + root.autoPresetLabel(root.autoPresetForWorkspace(root.currentWsId)) + " (" + root.capForWorkspace(root.currentWsId) + " windows limit)\nClick for settings · Right-click to pause"
+                return "Workspace Presets · 3. Enabled with defined presets\nWorkspace " + root.currentWsId + ": " + root.autoPresetLabel(root.autoPresetForWorkspace(root.currentWsId)) + " (" + root.capForWorkspace(root.currentWsId) + " windows limit)\nClick for settings · Right-click to pause"
             }
             // Mode 4: Autostart ON
             var appCount4 = root.savedAppsFor(root.currentWsId).length
             var status4 = root.isWorkspaceManual(root.currentWsId)
                 ? ("Workspace " + root.currentWsId + ": App Presets active" + (appCount4 > 0 ? " (" + appCount4 + " apps saved)" : ""))
                 : ("Workspace " + root.currentWsId + ": " + (root.currentWsHasDefinedPreset ? ("Preset " + root.autoPresetLabel(root.autoPresetForWorkspace(root.currentWsId))) : "Native tiling") + " · App Preset autostart active")
-            return "Simple Tile · 4. Enabled with App Preset Autostart (● dot)\n" + status4 + "\nClick for settings · Right-click to pause"
+            return "Workspace Presets · 4. Enabled with App Preset Autostart (● dot)\n" + status4 + "\nClick for settings · Right-click to pause"
         }
         onPressed: function(mouseButton) {
             if (mouseButton === Qt.RightButton) root.updateSetting("active", !root.tilingActive)
@@ -1276,7 +1276,7 @@ ShellUi.BarWidget {
                 Text {
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "Simple Tile"
+                    text: "Workspace Presets"
                     color: Theme.Color.accent
                     font.family: Theme.Style.font.family
                     font.pixelSize: Theme.Style.font.title
@@ -1294,7 +1294,7 @@ ShellUi.BarWidget {
                     selected: root.showManualView
                     onClicked: root.showManualView = !root.showManualView
                     onRightClicked: root.showHint("User Manual", "Open the comprehensive plugin manual with full explanations of Presets, App Presets, Autostart, and Conflict handling.", "Tip: Left-click to view the manual directly in this panel.")
-                    tooltipText: "Open or close the integrated Simple Tile User Manual"
+                    tooltipText: "Open or close the integrated Workspace Presets User Manual"
                 }
             }
 
@@ -1317,7 +1317,7 @@ ShellUi.BarWidget {
                 MouseArea {
                     anchors.fill: parent
                     acceptedButtons: Qt.RightButton
-                    onClicked: root.showHint("Tiling Active Toggle", "Temporarily pause or resume Simple Tile's automatic window movement without losing any saved presets.", "Tip: You can also right-click the bar icon anytime to toggle this.")
+                    onClicked: root.showHint("Tiling Active Toggle", "Temporarily pause or resume Workspace Presets' automatic window movement without losing any saved presets.", "Tip: You can also right-click the bar icon anytime to toggle this.")
                 }
             }
 
@@ -2981,7 +2981,7 @@ ShellUi.BarWidget {
                         }
                         Text {
                             width: parent.width
-                            text: "• Right-click any button or control to display instant help and handling tips.\n• Right-click the bar icon to pause or resume Simple Tile.\n• Left-click the bar icon to toggle this settings panel.\n• Right-click hints can be toggled on/off in the settings below."
+                            text: "• Right-click any button or control to display instant help and handling tips.\n• Right-click the bar icon to pause or resume Workspace Presets.\n• Left-click the bar icon to toggle this settings panel.\n• Right-click hints can be toggled on/off in the settings below."
                             color: Color.foreground
                             opacity: 0.85
                             font.family: Style.font.family

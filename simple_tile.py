@@ -625,7 +625,7 @@ def send_notification(title, body, urgency="normal"):
     if shutil.which("notify-send"):
         try:
             subprocess.Popen(
-                ["notify-send", "-a", "Simple Tile", "-u", urgency, title, body],
+                ["notify-send", "-a", "Workspace Presets", "-u", urgency, title, body],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,
@@ -1002,7 +1002,7 @@ def _restore_workspace(ws_id, dry_run=False, conflict_action="ask"):
                     hypr("eval", move_expression(c["address"], next_free, False))
                 names = [c.get("class") or c.get("initialClass") or "Window" for c in extra_on_ws]
                 send_notification(
-                    "Simple Tile",
+                    "Workspace Presets",
                     "Moved %d window(s) (%s) from Workspace %d to Workspace %d" %
                     (len(extra_on_ws), ", ".join(names), ws_id, next_free)
                 )

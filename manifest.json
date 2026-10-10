@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "id": "ubruckhaus.simple-tile",
-  "name": "Simple Tile",
-  "version": "0.2.7",
+  "name": "Workspace Presets",
+  "version": "0.2.8",
   "author": "Uwe Bruckhaus",
   "license": "MIT",
   "description": "Presets and App Presets for every workspace. Presets set a window limit and tiling layout; App Presets save your apps and their arrangement and restore them with one click or at login.",
@@ -24,7 +24,7 @@
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
-    "displayName": "Simple Tile",
+    "displayName": "Workspace Presets",
     "description": "Presets and App Presets for your workspaces, from the bar.",
     "category": "Windows",
     "defaultSection": "right",
