@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.3.0 — 2026-10-13
+
+- Eight built-in interface languages (English, German, French, Spanish, Italian, Portuguese, Dutch, Polish); the system language is used unless another one is picked.
+- New settings page behind the gear (⚙): language, right-click help hints and auto-move switches; **← Back**, Backspace or Esc returns.
+- The long built-in user manual was removed from the popup; MANUAL.md stays in the repository.
+
 ## 0.2.8 — 2026-10-10
 
 - Simple Tile is now called **Workspace Presets**: it does more than tiling (window limits, layouts and App Presets). The plugin ID, install path and saved settings stay the same.

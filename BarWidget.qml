@@ -8,6 +8,7 @@ import qs.Commons as Theme
 import "native/Ui" as Ui
 import qs.Ui as ShellUi
 import "LayoutState.js" as LayoutState
+import "I18n.js" as I18n
 
 ShellUi.BarWidget {
     id: root
@@ -65,7 +66,7 @@ ShellUi.BarWidget {
     property int selectedWorkspace: 0
     property bool opened: false
     property bool popoutSwitchClosing: false
-    property string lastMessage: "New windows move on overflow in Presets. App Presets preserve custom layouts."
+    property string lastMessage: root.t("newWindowsMoveOn")
     property bool failed: false
     property bool autostartFinished: false
     property int autostartAttempts: 0
@@ -85,8 +86,21 @@ ShellUi.BarWidget {
     property string activeHintTitle: ""
     property string activeHintBody: ""
     property string activeHintTip: ""
-    property bool showManualView: false
-    onShowManualViewChanged: panelScroll.contentY = 0
+    property bool showSettingsView: false
+    // Interface language: the system's unless one is picked on the settings
+    // page (stored in this widget's shell.json entry). Built-in translations.
+    readonly property string systemLang: I18n.systemLanguage(Quickshell.env("LC_ALL"), Quickshell.env("LC_MESSAGES"), Quickshell.env("LANG"))
+    readonly property string languageSetting: String(setting("language", "auto"))
+    readonly property string lang: I18n.resolve(languageSetting, systemLang)
+    function t(key, args) { return I18n.tr(lang, key, args) }
+    function tn(key, n, args) { return I18n.trn(lang, key, n, args) }
+    function setLanguage(code) {
+        var entry = Object.assign({}, settings, {id: moduleName})
+        if (code === "auto") delete entry.language
+        else entry.language = code
+        if (saveSettingsEntry(entry)) settings = entry
+    }
+    onShowSettingsViewChanged: { panelScroll.contentY = 0; content.forceActiveFocus() }
 
     Component.onCompleted: {
         Qt.callLater(function() {
@@ -97,6 +111,7 @@ ShellUi.BarWidget {
     }
 
     onOpenedChanged: {
+        if (!opened) showSettingsView = false
         if (opened) {
             restoreConflict = null
             if (selectedWorkspace === 0 && root.currentWsId > 0) {
@@ -202,14 +217,14 @@ ShellUi.BarWidget {
     }
 
     function autoPresetLabel(preset) {
-        if (preset === "side-by-side") return "Side-by-Side"
-        if (preset === "stacked") return "Stacked"
-        if (preset === "master-left") return "Master Left"
-        if (preset === "master-right") return "Master Right"
-        if (preset === "columns") return "Columns"
-        if (preset === "grid") return "2×2 Grid"
-        if (preset === "none") return "None (Native)"
-        return preset || "Default"
+        if (preset === "side-by-side") return root.t("sideBySide")
+        if (preset === "stacked") return root.t("stacked")
+        if (preset === "master-left") return root.t("masterLeft")
+        if (preset === "master-right") return root.t("masterRight")
+        if (preset === "columns") return root.t("columns")
+        if (preset === "grid") return root.t("grid")
+        if (preset === "none") return root.t("noneNative")
+        return preset || root.t("default")
     }
 
     function autoPresetSymbol(preset) {
@@ -246,16 +261,16 @@ ShellUi.BarWidget {
             failed = false
         } else {
             failed = true
-            lastMessage = "Could not save settings. Try reopening the plugin."
+            lastMessage = root.t("couldNotSaveSettings")
             return
         }
 
         if (preset === "none") {
             applyPresetWorker.command = ["python3", root.helperScriptPath(), "--remove-preset", String(wsId)]
-            lastMessage = "Workspace " + wsId + ": Native tiling, no window limit or automatic overflow"
+            lastMessage = root.t("wsNativeMsg", [wsId])
         } else {
             applyPresetWorker.command = ["python3", root.helperScriptPath(), "--apply-preset", String(wsId), preset]
-            lastMessage = "Set Workspace " + wsId + " to " + autoPresetLabel(preset) + " layout"
+            lastMessage = root.t("setWsLayout", [wsId, autoPresetLabel(preset)])
         }
         applyPresetWorker.running = true
     }
@@ -284,14 +299,14 @@ ShellUi.BarWidget {
             failed = false
         } else {
             failed = true
-            lastMessage = "Could not save settings. Try reopening the plugin."
+            lastMessage = root.t("couldNotSaveSettings")
             return
         }
 
         var defaultPreset = defaultAutoPresetFor(effectiveCapFor(wsId))
         applyPresetWorker.command = ["python3", root.helperScriptPath(), "--apply-preset", String(wsId), defaultPreset]
         applyPresetWorker.running = true
-        lastMessage = "Reset Workspace " + wsId + " to default layout (" + autoPresetLabel(defaultPreset) + ")"
+        lastMessage = root.t("resetWsLayout", [wsId, autoPresetLabel(defaultPreset)])
     }
 
     function toggleWorkspaceAutoPreset(wsId, preset) {
@@ -307,7 +322,7 @@ ShellUi.BarWidget {
         var current = Object.assign({}, defaultAutoPresets)
         current[String(capVal)] = preset
         updateSetting("defaultAutoPresets", current)
-        lastMessage = "Default for " + capVal + " windows: " + autoPresetLabel(preset)
+        lastMessage = root.t("defaultFor", [capVal, autoPresetLabel(preset)])
     }
 
     function removeSavedApp(wsId, index) {
@@ -323,10 +338,10 @@ ShellUi.BarWidget {
         if (saveSettingsEntry(entry)) {
             settings = entry
             failed = false
-            lastMessage = "Removed " + (removed.name || "app") + " from the saved layout."
+            lastMessage = root.t("removedFromLayout", [removed.name || root.t("appLower")])
         } else {
             failed = true
-            lastMessage = "Could not save the removal. Try again."
+            lastMessage = root.t("couldNotSaveThe")
         }
     }
 
@@ -344,16 +359,16 @@ ShellUi.BarWidget {
     function restoreFailureText(wsId) {
         var failures = failedAppDetails[String(wsId)] || []
         var reasons = {
-            window_timeout: "No matching window appeared before the restore timed out.",
-            close_timeout: "The window did not close. Check Workspace " + wsId + " for a save or close-confirmation dialog, then retry Restore.",
-            launch_failed: "The app could not be launched.",
-            command_not_found: "The saved launch command could not be found.",
-            desktop_file_not_found: "The saved app launcher could not be found.",
-            workspace_move_failed: "The window could not be moved to this workspace.",
-            app_launching_disabled: "Launching missing apps is disabled for this preset."
+            window_timeout: root.t("noMatchingWindowAppeared"),
+            close_timeout: root.t("closeTimeout", [wsId]),
+            launch_failed: root.t("theAppCouldNot"),
+            command_not_found: root.t("theSavedLaunchCommand"),
+            desktop_file_not_found: root.t("theSavedAppLauncher"),
+            workspace_move_failed: root.t("theWindowCouldNot"),
+            app_launching_disabled: root.t("launchingMissingAppsIs")
         }
         return failures.map(function(f) {
-            return (f.name || f.class || "App") + ": " + (reasons[f.reason] || f.reason || "Restore failed without a reason.")
+            return (f.name || f.class || root.t("app")) + ": " + (reasons[f.reason] || f.reason || root.t("restoreFailedWithoutA"))
         }).join("\n")
     }
 
@@ -430,9 +445,9 @@ ShellUi.BarWidget {
 
     function savedLayoutSummary(wsId) {
         var layout = layoutForWorkspace(wsId)
-        if (!layout) return "None"
+        if (!layout) return root.t("none")
         var winCount = layout.count || (layout.windows ? layout.windows.length : 0)
-        return winCount + (winCount === 1 ? " window" : " windows")
+        return root.tn("windowsN", winCount)
     }
 
     function resolveIcon(iconName) {
@@ -505,10 +520,10 @@ ShellUi.BarWidget {
         if (saveSettingsEntry(entry)) {
             settings = entry
             failed = false
-            lastMessage = "Set Workspace " + wsId + " limit to " + newCap + " windows"
+            lastMessage = root.t("setWsLimit", [wsId, newCap])
         } else {
             failed = true
-            lastMessage = "Could not save settings. Try reopening the plugin."
+            lastMessage = root.t("couldNotSaveSettings")
             return
         }
 
@@ -538,10 +553,10 @@ ShellUi.BarWidget {
         if (saveSettingsEntry(entry)) {
             settings = entry
             failed = false
-            lastMessage = "Reset Workspace " + wsId + " limit to default (" + root.cap + " windows)"
+            lastMessage = root.t("resetWsLimit", [wsId, root.cap])
         } else {
             failed = true
-            lastMessage = "Could not save settings. Try reopening the plugin."
+            lastMessage = root.t("couldNotSaveSettings")
             return
         }
 
@@ -562,14 +577,14 @@ ShellUi.BarWidget {
         if (failed) return
         activeWorkspaceTab = mode === "manual" ? "manual" : "presets"
         if (mode === "manual") {
-            lastMessage = "Workspace " + wsId + ": open, close and arrange windows freely. Save to update the App Preset."
+            lastMessage = root.t("wsManualMsg", [wsId])
         } else {
             var preset = autoPresetForWorkspace(wsId)
             applyPresetWorker.command = ["python3", root.helperScriptPath(), "--apply-preset", String(wsId), preset]
             applyPresetWorker.running = true
             lastMessage = preset === "none"
-                ? "Workspace " + wsId + ": Native tiling, no window limit or automatic overflow"
-                : "Workspace " + wsId + ": resumed " + autoPresetLabel(preset) + " layout and automatic overflow"
+                ? root.t("wsNativeMsg", [wsId])
+                : root.t("wsResumed", [wsId, autoPresetLabel(preset)])
         }
     }
 
@@ -602,7 +617,7 @@ ShellUi.BarWidget {
             settings = entry
             failed = false
             activeWorkspaceTab = "presets"
-            lastMessage = "Removed App Preset for Workspace " + wsId
+            lastMessage = root.t("removedAppPresetFor", [wsId])
             var defaultPreset = autoPresetForWorkspace(wsId) || defaultAutoPresetFor(effectiveCapFor(wsId))
             if (defaultPreset && defaultPreset !== "none") {
                 applyPresetWorker.command = ["python3", root.helperScriptPath(), "--apply-preset", String(wsId), defaultPreset]
@@ -634,10 +649,10 @@ ShellUi.BarWidget {
                 applyPresetWorker.command = ["python3", root.helperScriptPath(), "--apply-preset", String(wsId), defaultPreset]
                 applyPresetWorker.running = true
             }
-            lastMessage = "Reset Workspace " + wsId + " to default (" + root.cap + " limit, " + autoPresetLabel(defaultPreset) + ")"
+            lastMessage = root.t("resetWsDefault", [wsId, root.cap, autoPresetLabel(defaultPreset)])
         } else {
             failed = true
-            lastMessage = "Could not save settings. Try reopening the plugin."
+            lastMessage = root.t("couldNotSaveSettings")
         }
     }
 
@@ -671,10 +686,10 @@ ShellUi.BarWidget {
             failed = false
             applyPresetWorker.command = ["python3", root.helperScriptPath(), "--remove-all-presets"]
             applyPresetWorker.running = true
-            lastMessage = "Cleared all layout and App Presets. All workspaces use Native tiling."
+            lastMessage = root.t("clearedAllLayoutAnd")
         } else {
             failed = true
-            lastMessage = "Could not save settings. Try reopening the plugin."
+            lastMessage = root.t("couldNotSaveSettings")
         }
     }
 
@@ -690,10 +705,10 @@ ShellUi.BarWidget {
             failed = false
             applyPresetWorker.command = ["python3", root.helperScriptPath(), "--remove-all-presets"]
             applyPresetWorker.running = true
-            lastMessage = "Removed layout presets for all workspaces (Native tiling)"
+            lastMessage = root.t("removedLayoutPresetsFor")
         } else {
             failed = true
-            lastMessage = "Could not save settings. Try reopening the plugin."
+            lastMessage = root.t("couldNotSaveSettings")
         }
     }
 
@@ -711,10 +726,10 @@ ShellUi.BarWidget {
             failed = false
             applyPresetWorker.command = ["python3", root.helperScriptPath(), "--reset-all-presets"]
             applyPresetWorker.running = true
-            lastMessage = "Reset all workspaces to global defaults (" + root.cap + " limit, " + autoPresetLabel(defaultAutoPresetFor(root.cap)) + ")"
+            lastMessage = root.t("resetAllDefaults", [root.cap, autoPresetLabel(defaultAutoPresetFor(root.cap))])
         } else {
             failed = true
-            lastMessage = "Could not save settings. Try reopening the plugin."
+            lastMessage = root.t("couldNotSaveSettings")
         }
     }
 
@@ -731,10 +746,10 @@ ShellUi.BarWidget {
             failed = false
             failedAppNames = ({})
             failedAppDetails = ({})
-            lastMessage = "Removed all saved App Presets across all workspaces"
+            lastMessage = root.t("removedAllSavedApp")
         } else {
             failed = true
-            lastMessage = "Could not save settings. Try reopening the plugin."
+            lastMessage = root.t("couldNotSaveSettings")
         }
     }
 
@@ -767,7 +782,7 @@ ShellUi.BarWidget {
         if (saveSettingsEntry(entry)) {
             settings = entry
             failed = false
-            lastMessage = "Saved App Preset for Workspace " + wsId + " (" + (res.count || 0) + " windows)"
+            lastMessage = root.t("savedAppPresetFor", [wsId, res.count || 0])
             activeWorkspaceTab = "manual"
         }
     }
@@ -807,7 +822,7 @@ ShellUi.BarWidget {
             failed = false
         } else {
             failed = true
-            lastMessage = "Could not save settings. Try reopening the plugin."
+            lastMessage = root.t("couldNotSaveSettings")
         }
     }
     function nextWindow() {
@@ -839,20 +854,20 @@ ShellUi.BarWidget {
                 try {
                     var result = JSON.parse(text)
                     root.failed = result.status === "error"
-                    if (root.failed) root.lastMessage = "Could not move the window. Check the shell log."
-                    else if (result.status === "moved") root.lastMessage = "Last move: workspace " + result.source + " → " + result.target
-                    else if (result.status === "manual") root.lastMessage = "Workspace " + result.workspace + " is using App Presets."
+                    if (root.failed) root.lastMessage = root.t("couldNotMoveThe")
+                    else if (result.status === "moved") root.lastMessage = root.t("lastMove", [result.source, result.target])
+                    else if (result.status === "manual") root.lastMessage = root.t("wsUsingAppPresets", [result.workspace])
                     if (root.failed) console.warn("Workspace Presets:", result.message)
                 } catch (error) {
                     root.failed = true
-                    root.lastMessage = "The window helper returned an invalid response."
+                    root.lastMessage = root.t("theWindowHelperReturned")
                 }
             }
         }
         onExited: function(code) {
             if (code !== 0) {
                 root.failed = true
-                root.lastMessage = "Window helper failed. Check the shell log."
+                root.lastMessage = root.t("windowHelperFailedCheck")
             }
             settle.restart()
         }
@@ -869,11 +884,11 @@ ShellUi.BarWidget {
                         root.onWorkspaceCaptured(captureWorker.targetWs, res)
                     } else {
                         root.failed = true
-                        root.lastMessage = "Capture failed: " + (res.message || "Unknown error")
+                        root.lastMessage = root.t("captureFailed", [res.message || root.t("unknownError")])
                     }
                 } catch (e) {
                     root.failed = true
-                    root.lastMessage = "The capture helper returned an invalid response."
+                    root.lastMessage = root.t("theCaptureHelperReturned")
                 }
             }
         }
@@ -889,31 +904,31 @@ ShellUi.BarWidget {
                     if (res.status === "conflict") {
                         root.failed = false
                         root.restoreConflict = res
-                        root.lastMessage = "Workspace " + res.workspace + " has " + res.conflict_count + " open window(s) not in this preset."
+                        root.lastMessage = root.t("wsConflicts", [res.workspace, res.conflict_count])
                     } else if (res.failed && res.failed.length > 0) {
                         root.restoreConflict = null
                         root.failed = true
                         root.recordFailedApps(res.workspace || actionWorker.targetWs, res.failed)
                         var failedNames = root.restoreFailureText(res.workspace || actionWorker.targetWs)
                         if (res.launched && res.launched.length > 0) {
-                            root.lastMessage = "Launched: " + res.launched.join(", ") + " · Could not restore: " + failedNames
+                            root.lastMessage = root.t("launchedCouldNot", [res.launched.join(", "), failedNames])
                         } else {
-                            root.lastMessage = "Could not restore: " + failedNames
+                            root.lastMessage = root.t("couldNotRestore", [failedNames])
                         }
                     } else if (res.status === "ok") {
                         root.restoreConflict = null
                         root.failed = false
                         root.recordFailedApps(res.workspace || actionWorker.targetWs, [])
                         if (res.launched && res.launched.length > 0) {
-                            root.lastMessage = "Launched: " + res.launched.join(", ")
+                            root.lastMessage = root.t("launched", [res.launched.join(", ")])
                         } else if (res.already_running && res.already_running.length > 0) {
-                            root.lastMessage = (res.geometry_restored ? "Restored layout: " : "Already open: ") + res.already_running.join(", ")
+                            root.lastMessage = (res.geometry_restored ? root.t("restoredLayout") : root.t("alreadyOpen")) + res.already_running.join(", ")
                         } else {
-                            root.lastMessage = "Action completed."
+                            root.lastMessage = root.t("actionCompleted")
                         }
                     } else if (res.message) {
                         root.failed = res.status === "error"
-                        root.lastMessage = "Workspace " + actionWorker.targetWs + ": " + res.message
+                        root.lastMessage = root.t("wsMessage", [actionWorker.targetWs, res.message])
                     }
                 } catch (e) {}
             }
@@ -928,13 +943,13 @@ ShellUi.BarWidget {
                     var res = JSON.parse(text)
                     if (res.status === "ok") {
                         if (res.action === "remove_all_presets") {
-                            root.lastMessage = "All workspaces set to Native layout (no presets)"
+                            root.lastMessage = root.t("allWorkspacesSetTo")
                         } else if (res.action === "reset_all_presets") {
-                            root.lastMessage = "All workspaces reset to default layout (" + root.autoPresetLabel(res.default_preset) + ")"
+                            root.lastMessage = root.t("allResetDefault", [root.autoPresetLabel(res.default_preset)])
                         } else if (res.preset === "none") {
-                            root.lastMessage = "Preset removed (Native layout) on Workspace " + res.workspace
+                            root.lastMessage = root.t("presetRemovedOn", [res.workspace])
                         } else {
-                            root.lastMessage = "Applied " + root.autoPresetLabel(res.preset) + " to Workspace " + res.workspace
+                            root.lastMessage = root.t("appliedTo", [root.autoPresetLabel(res.preset), res.workspace])
                         }
                     } else if (res.message) {
                         root.lastMessage = res.message
@@ -954,7 +969,7 @@ ShellUi.BarWidget {
                         root.autostartFinished = true
                     if (res.failed_count > 0) {
                         root.failed = true
-                        root.lastMessage = "Some saved windows could not be restored. Open their workspace and try Restore again."
+                        root.lastMessage = root.t("someSavedWindowsCould")
                     }
                 } catch (e) {}
             }
@@ -973,7 +988,7 @@ ShellUi.BarWidget {
             if (++root.autostartAttempts > 15) {
                 root.autostartFinished = true
                 root.failed = true
-                root.lastMessage = "Autostart could not connect. Use Restore to retry."
+                root.lastMessage = root.t("autostartCouldNotConnect")
                 return
             }
             for (var k in root.workspaceLayouts) {
@@ -1224,20 +1239,20 @@ ShellUi.BarWidget {
         dimmed: !root.tilingActive
         tooltipText: {
             if (root.currentBarIconMode === 1) {
-                return "Workspace Presets · 1. Disabled (Paused)\nClick for settings · Right-click to resume"
+                return root.t("workspacePresetsDisabledPaus")
             }
             if (root.currentBarIconMode === 2) {
-                return "Workspace Presets · 2. Enabled (No preset defined)\nWorkspace " + root.currentWsId + ": Native tiling\nClick for settings · Right-click to pause"
+                return root.t("tip2", [root.currentWsId])
             }
             if (root.currentBarIconMode === 3) {
-                return "Workspace Presets · 3. Enabled with defined presets\nWorkspace " + root.currentWsId + ": " + root.autoPresetLabel(root.autoPresetForWorkspace(root.currentWsId)) + " (" + root.capForWorkspace(root.currentWsId) + " windows limit)\nClick for settings · Right-click to pause"
+                return root.t("tip3", [root.currentWsId, root.autoPresetLabel(root.autoPresetForWorkspace(root.currentWsId)), root.capForWorkspace(root.currentWsId)])
             }
             // Mode 4: Autostart ON
             var appCount4 = root.savedAppsFor(root.currentWsId).length
             var status4 = root.isWorkspaceManual(root.currentWsId)
-                ? ("Workspace " + root.currentWsId + ": App Presets active" + (appCount4 > 0 ? " (" + appCount4 + " apps saved)" : ""))
-                : ("Workspace " + root.currentWsId + ": " + (root.currentWsHasDefinedPreset ? ("Preset " + root.autoPresetLabel(root.autoPresetForWorkspace(root.currentWsId))) : "Native tiling") + " · App Preset autostart active")
-            return "Workspace Presets · 4. Enabled with App Preset Autostart (● dot)\n" + status4 + "\nClick for settings · Right-click to pause"
+                ? (root.t("tipAppActive", [root.currentWsId]) + (appCount4 > 0 ? " (" + root.t("appsSaved", [appCount4]) + ")" : ""))
+                : root.t("tipPresetAuto", [root.currentWsId, root.currentWsHasDefinedPreset ? root.t("presetN", [root.autoPresetLabel(root.autoPresetForWorkspace(root.currentWsId))]) : root.t("nativeTiling")])
+            return root.t("tip4", [status4])
         }
         onPressed: function(mouseButton) {
             if (mouseButton === Qt.RightButton) root.updateSetting("active", !root.tilingActive)
@@ -1267,7 +1282,11 @@ ShellUi.BarWidget {
             id: content
             width: parent.width
             spacing: Style.space(12)
-            Keys.onEscapePressed: root.close()
+            // Esc and Backspace leave the settings page first.
+            Keys.onEscapePressed: { if (root.showSettingsView) root.showSettingsView = false; else root.close() }
+            Keys.onPressed: function(event) {
+                if (event.key === Qt.Key_Backspace && root.showSettingsView) { root.showSettingsView = false; event.accepted = true }
+            }
 
             Item {
                 width: parent.width
@@ -1276,7 +1295,7 @@ ShellUi.BarWidget {
                 Text {
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "Workspace Presets"
+                    text: root.t("workspacePresets2")
                     color: Theme.Color.accent
                     font.family: Theme.Style.font.family
                     font.pixelSize: Theme.Style.font.title
@@ -1284,23 +1303,22 @@ ShellUi.BarWidget {
                 }
 
                 Ui.Button {
+                    visible: !root.showSettingsView
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     implicitHeight: Style.space(24)
-                    text: root.showManualView ? "✕ Close Manual" : "📖 User Manual"
+                    text: "\udb81\udc93"
                     fontSize: Style.font.caption
                     bordered: true
                     focusable: true
-                    selected: root.showManualView
-                    onClicked: root.showManualView = !root.showManualView
-                    onRightClicked: root.showHint("User Manual", "Open the comprehensive plugin manual with full explanations of Presets, App Presets, Autostart, and Conflict handling.", "Tip: Left-click to view the manual directly in this panel.")
-                    tooltipText: "Open or close the integrated Workspace Presets User Manual"
+                    onClicked: root.showSettingsView = true
+                    tooltipText: root.t("settings")
                 }
             }
 
             Text {
                 width: parent.width
-                text: "A little room to focus."
+                text: root.t("aLittleRoomTo")
                 color: Color.foreground
                 opacity: 0.65
                 font.family: Style.font.family
@@ -1308,16 +1326,17 @@ ShellUi.BarWidget {
             }
 
             Ui.Toggle {
+                visible: !root.showSettingsView
                 width: parent.width
-                label: root.tilingActive ? "Tiling active" : "Tiling paused"
-                description: "Move new windows when full · Manual moves override"
+                label: root.tilingActive ? root.t("tilingActive") : root.t("tilingPaused")
+                description: root.t("moveNewWindowsWhen")
                 checked: root.tilingActive
                 onClicked: root.updateSetting("active", !root.tilingActive)
 
                 MouseArea {
                     anchors.fill: parent
                     acceptedButtons: Qt.RightButton
-                    onClicked: root.showHint("Tiling Active Toggle", "Temporarily pause or resume Workspace Presets' automatic window movement without losing any saved presets.", "Tip: You can also right-click the bar icon anytime to toggle this.")
+                    onClicked: root.showHint(root.t("tilingActiveToggle"), root.t("temporarilyPauseOrResume"), root.t("tipYouCanAlso"))
                 }
             }
 
@@ -1368,7 +1387,7 @@ ShellUi.BarWidget {
                             fontSize: Style.font.caption
                             bordered: false
                             onClicked: root.clearHint()
-                            tooltipText: "Dismiss hint"
+                            tooltipText: root.t("dismissHint")
                         }
                     }
 
@@ -1396,10 +1415,85 @@ ShellUi.BarWidget {
                 }
             }
 
-            // MAIN WORKSPACE CONTROLS VIEW (Visible when not showing User Manual)
+            // SETTINGS VIEW: language and the global behaviour switches.
+            Column {
+                id: settingsView
+                visible: root.showSettingsView
+                width: parent.width
+                spacing: Style.space(12)
+
+                Row {
+                    spacing: Style.space(12)
+                    Ui.Button {
+                        focusable: true
+                        bordered: true
+                        iconText: "\udb80\udc4d"
+                        text: root.t("back") + " · \u232b"
+                        tooltipText: root.t("backTip")
+                        anchors.verticalCenter: parent.verticalCenter
+                        onClicked: { root.showSettingsView = false; content.forceActiveFocus() }
+                    }
+                    Text { textFormat: Text.PlainText; text: root.t("settings").toUpperCase(); color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 1; anchors.verticalCenter: parent.verticalCenter }
+                }
+                Ui.PanelSeparator { width: parent.width }
+
+                Row {
+                    spacing: Style.space(10)
+                    Text { id: languageLabel; textFormat: Text.PlainText; width: Style.space(90); text: root.t("language"); color: Color.foreground; opacity: 0.8; font.family: Style.font.family; font.pixelSize: Style.font.caption; anchors.verticalCenter: parent.verticalCenter }
+                    CompactDropdown {
+                        id: languagePicker
+                        anchors.verticalCenter: parent.verticalCenter
+                        showLabel: false
+                        // Wide enough for the longest option, plus padding and the chevron.
+                        width: fitWidth
+                        fontSize: Style.font.caption
+                        rowHeight: languageLabel.implicitHeight + Style.space(6)
+                        popupRowHeight: languageLabel.implicitHeight + Style.space(8)
+                        options: [{ value: "auto", label: root.t("systemLanguage", [I18n.languageName(root.systemLang)]) }]
+                            .concat(I18n.LANGUAGES.map(function(l) { return { value: l.code, label: l.name } }))
+                        value: root.languageSetting
+                        // Picking cuts the value binding inside the dropdown; restore it.
+                        onChanged: function(picked) {
+                            root.setLanguage(picked)
+                            languagePicker.value = Qt.binding(function() { return root.languageSetting })
+                        }
+                    }
+                }
+
+                Ui.Toggle {
+                    width: parent.width
+                    label: root.t("rightClickHelpHints")
+                    description: root.t("showExplanationsTipsWhen")
+                    checked: root.rightClickHintsEnabled
+                    onClicked: root.updateSetting("rightClickHints", !root.rightClickHintsEnabled)
+
+                    MouseArea {
+                        anchors.fill: parent
+                        acceptedButtons: Qt.RightButton
+                        onClicked: root.showHint(root.t("rightClickHints"), root.t("toggleContextualHelpHints"), root.t("tipYouCanTurn"))
+                    }
+                }
+
+                Ui.Toggle {
+                    width: parent.width
+                    label: root.t("autoMoveOnRestore")
+                    description: root.t("moveExistingWindowsTo")
+                    checked: root.autoMoveOnRestore
+                    onClicked: root.updateSetting("autoMoveOnRestore", !root.autoMoveOnRestore)
+
+                    MouseArea {
+                        anchors.fill: parent
+                        acceptedButtons: Qt.RightButton
+                        onClicked: root.showHint(root.t("autoMoveOnRestore2"), root.t("whenRestoringAnApp"), root.t("tipIdealForFast"))
+                    }
+                }
+
+            }
+
+            // MAIN WORKSPACE CONTROLS VIEW (hidden while the settings view is open)
             Column {
                 id: workspaceControlsView
-                visible: !root.showManualView
+                visible: !root.showSettingsView
                 width: parent.width
                 spacing: Style.space(12)
 
@@ -1410,7 +1504,7 @@ ShellUi.BarWidget {
                     Text {
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "WORKSPACES"
+                        text: root.t("workspaces")
                         color: Color.foreground
                         opacity: 0.65
                         font.family: Style.font.family
@@ -1431,8 +1525,8 @@ ShellUi.BarWidget {
                             bordered: true
                             focusable: true
                             onClicked: root.workspacePage = 0
-                            onRightClicked: root.showHint("Workspaces 1–4", "Display the first page of workspaces (Workspaces 1 to 4). Cards show live layouts and app snapshots.", "")
-                            Accessible.name: "Workspaces 1 to 4"
+                            onRightClicked: root.showHint(root.t("workspaces2"), root.t("displayTheFirstPage"), "")
+                            Accessible.name: root.t("workspacesTo")
                         }
 
                         Ui.Button {
@@ -1443,8 +1537,8 @@ ShellUi.BarWidget {
                             bordered: true
                             focusable: true
                             onClicked: root.workspacePage = 1
-                            onRightClicked: root.showHint("Workspaces 5–8", "Display the second page of workspaces (Workspaces 5 to 8). Cards show live layouts and app snapshots.", "")
-                            Accessible.name: "Workspaces 5 to 8"
+                            onRightClicked: root.showHint(root.t("workspaces3"), root.t("displayTheSecondPage"), "")
+                            Accessible.name: root.t("workspacesTo2")
                         }
                     }
                 }
@@ -1457,9 +1551,9 @@ ShellUi.BarWidget {
                     bordered: true
                     focusable: true
                     onClicked: root.selectedWorkspace = 0
-                    onRightClicked: root.showHint("All Workspaces", "Select the global default scope. Any setting configured here applies to all workspaces that do not have custom overrides.", "Tip: Set the default limit to 2 or 3 for standard workflow.")
-                    Accessible.name: "All workspaces default"
-                    tooltipText: "Set the default window limit applied to all workspaces"
+                    onRightClicked: root.showHint(root.t("allWorkspaces"), root.t("selectTheGlobalDefault"), root.t("tipSetTheDefault"))
+                    Accessible.name: root.t("allWorkspacesDefault")
+                    tooltipText: root.t("setTheDefaultWindow")
 
                 Item {
                     anchors.fill: parent
@@ -1470,7 +1564,7 @@ ShellUi.BarWidget {
                     Text {
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "All Workspaces"
+                        text: root.t("allWorkspaces")
                         color: Color.foreground
                         font.family: Style.font.family
                         font.pixelSize: Style.font.bodySmall
@@ -1481,7 +1575,7 @@ ShellUi.BarWidget {
                     Text {
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "Default: " + root.cap + " windows"
+                        text: root.t("defaultWindows", [root.cap])
                         color: allCard.selected ? Color.accent : Color.foreground
                         font.family: Style.font.family
                         font.pixelSize: Style.font.caption
@@ -1508,20 +1602,20 @@ ShellUi.BarWidget {
                         readonly property var savedWindows: root.savedWindowsFor(wsCard.modelData)
                         readonly property bool hasSavedApps: savedApps && savedApps.length > 0
                         tooltipText: {
-                            var base = "Workspace " + modelData + (modelData === root.currentWsId ? " (Active)" : "")
+                            var base = root.t("workspaceN", [modelData]) + (modelData === root.currentWsId ? root.t("active") : "")
                             if (wsCard.isManual) {
-                                var summary = wsCard.hasSavedApps ? (wsCard.savedApps.length + " apps saved") : "App Preset"
-                                if (root.workspaceAutostart(modelData)) summary += " · Autostart on"
+                                var summary = wsCard.hasSavedApps ? root.t("appsSaved", [wsCard.savedApps.length]) : root.t("appPreset")
+                                if (root.workspaceAutostart(modelData)) summary += root.t("autostartOn")
                                 return base + "\n" + summary
                             }
-                            if (root.isWorkspaceNative(modelData)) return base + "\nNative tiling · No window limit or automatic overflow"
+                            if (root.isWorkspaceNative(modelData)) return base + "\n" + root.t("nativeNoLimit")
                             var presetKey = root.autoPresetForWorkspace(modelData)
-                            var presetDesc = presetKey === "none" ? "Native (no preset)" : (root.autoPresetLabel(presetKey) + (root.hasCustomPreset(modelData) ? " (custom)" : " (default)"))
-                            return base + "\nLimit: " + root.capForWorkspace(modelData) + " windows · Preset: " + presetDesc
+                            var presetDesc = presetKey === "none" ? root.t("nativeNoPreset") : (root.autoPresetLabel(presetKey) + (root.hasCustomPreset(modelData) ? root.t("custom") : root.t("default2")))
+                            return base + "\n" + root.t("limitPreset", [root.capForWorkspace(modelData), presetDesc])
                         }
                         onClicked: root.selectedWorkspace = modelData
-                        onRightClicked: root.showHint("Workspace " + wsCard.modelData + " Card", wsCard.isManual ? ("Workspace " + wsCard.modelData + " is in App Presets mode (" + root.savedLayoutSummary(wsCard.modelData) + "). Custom window geometry is preserved and overflow moves are disabled.") : root.isWorkspaceNative(wsCard.modelData) ? ("Workspace " + wsCard.modelData + " uses native tiling without a window limit or automatic overflow.") : ("Workspace " + wsCard.modelData + " is in Presets mode with a limit of " + root.capForWorkspace(wsCard.modelData) + " windows and " + root.autoPresetLabel(root.autoPresetForWorkspace(wsCard.modelData)) + " layout."), "Tip: Left-click to select and configure this workspace.")
-                        Accessible.name: "Workspace " + modelData
+                        onRightClicked: root.showHint(root.t("wsCardTitle", [wsCard.modelData]), wsCard.isManual ? root.t("wsCardManual", [wsCard.modelData, root.savedLayoutSummary(wsCard.modelData)]) : root.isWorkspaceNative(wsCard.modelData) ? root.t("wsCardNative", [wsCard.modelData]) : root.t("wsCardPresets", [wsCard.modelData, root.capForWorkspace(wsCard.modelData), root.autoPresetLabel(root.autoPresetForWorkspace(wsCard.modelData))]), root.t("tipLeftClickTo2"))
+                        Accessible.name: root.t("workspaceN", [modelData])
 
                         Item {
                             anchors.fill: parent
@@ -1565,7 +1659,7 @@ ShellUi.BarWidget {
                                 Text {
                                     anchors.right: parent.right
                                     anchors.verticalCenter: parent.verticalCenter
-                                    text: wsCard.isManual ? "App Preset" : (root.isWorkspaceNative(wsCard.modelData) ? "No limit" : ("Max " + root.capForWorkspace(wsCard.modelData)))
+                                    text: wsCard.isManual ? root.t("appPreset") : (root.isWorkspaceNative(wsCard.modelData) ? root.t("noLimit") : root.t("maxN", [root.capForWorkspace(wsCard.modelData)]))
                                     color: (wsCard.isManual || root.hasCustomCap(wsCard.modelData)) ? Color.accent : Color.foreground
                                     font.family: Style.font.family
                                     font.pixelSize: wsCard.isManual ? Math.max(9, Style.font.caption - 2) : Style.font.caption
@@ -1658,7 +1752,7 @@ ShellUi.BarWidget {
                                     Text {
                                         anchors.centerIn: parent
                                         visible: wsCard.isManual && wsCard.savedWindows.length === 0
-                                        text: "No App Preset"
+                                        text: root.t("noAppPreset")
                                         color: Color.foreground
                                         opacity: 0.4
                                         font.family: Style.font.family
@@ -1896,7 +1990,7 @@ ShellUi.BarWidget {
                                             opacity: 1.0
                                             Text {
                                                 anchors.centerIn: parent
-                                                text: "Native"
+                                                text: root.t("native")
                                                 color: Color.foreground
                                                 font.family: Style.font.family
                                                 font.pixelSize: Style.font.caption
@@ -1923,7 +2017,7 @@ ShellUi.BarWidget {
                     spacing: Style.space(8)
 
                     Text {
-                        text: "WORKSPACE " + root.selectedWorkspace + (root.selectedWorkspace === root.currentWsId ? " (ACTIVE)" : "")
+                        text: root.t("workspaceN", [root.selectedWorkspace]).toUpperCase() + (root.selectedWorkspace === root.currentWsId ? root.t("active2") : "")
                         color: Color.foreground
                         opacity: 0.65
                         font.family: Style.font.family
@@ -1937,23 +2031,23 @@ ShellUi.BarWidget {
                         spacing: Style.space(6)
                         Ui.Button {
                             width: (parent.width - Style.space(6)) / 2
-                            text: "Presets"
+                            text: root.t("presets")
                             selected: root.activeWorkspaceTab === "presets"
                             bordered: true
                             focusable: true
                             onClicked: root.setWorkspaceMode(root.selectedWorkspace, "auto")
-                            onRightClicked: root.showHint("Presets Mode", "Dynamic automatic tiling. Newly opened windows overflow to the next workspace once the limit is reached.", "Tip: Select from geometric presets like Side-by-Side, Columns, Master, or Grid.")
-                            tooltipText: "Presets: geometric tiling layout presets with automatic overflow"
+                            onRightClicked: root.showHint(root.t("presetsMode"), root.t("dynamicAutomaticTilingNewly"), root.t("tipSelectFromGeometric"))
+                            tooltipText: root.t("presetsGeometricTilingLayout")
                         }
                         Ui.Button {
                             width: (parent.width - Style.space(6)) / 2
-                            text: "App Presets"
+                            text: root.t("appPresets")
                             selected: root.activeWorkspaceTab === "manual"
                             bordered: true
                             focusable: true
                             onClicked: root.setWorkspaceMode(root.selectedWorkspace, "manual")
-                            onRightClicked: root.showHint("App Presets Mode", "Switches this workspace to manual editing immediately. Open, close and arrange windows freely, with or without a saved preset.", "Tip: Save captures your changes; Restore explicitly reapplies the saved apps and layout.")
-                            tooltipText: "App Presets: edit windows freely; save or restore when ready"
+                            onRightClicked: root.showHint(root.t("appPresetsMode"), root.t("switchesThisWorkspaceTo"), root.t("tipSaveCapturesYour"))
+                            tooltipText: root.t("appPresetsEditWindows")
                         }
                     }
 
@@ -1966,12 +2060,12 @@ ShellUi.BarWidget {
                         Ui.Button {
                             visible: !root.isWorkspaceNative(root.selectedWorkspace) && root.hasCustomCap(root.selectedWorkspace)
                             width: parent.width
-                            text: "Reset workspace " + root.selectedWorkspace + " to default (" + root.cap + ")"
+                            text: root.t("resetWsTo", [root.selectedWorkspace, root.cap])
                             bordered: true
                             focusable: true
                             fontSize: Style.font.caption
                             onClicked: root.resetWorkspaceCap(root.selectedWorkspace)
-                            onRightClicked: root.showHint("Reset Limit to Default", "Removes the custom window limit for Workspace " + root.selectedWorkspace + ", restoring the global default (" + root.cap + " windows).", "")
+                            onRightClicked: root.showHint(root.t("resetLimitToDefault"), root.t("resetLimitBody", [root.selectedWorkspace, root.cap]), "")
                         }
                         Grid {
                             width: parent.width
@@ -1987,14 +2081,14 @@ ShellUi.BarWidget {
                                     bordered: true
                                     focusable: true
                                     onClicked: root.setWorkspaceCap(root.selectedWorkspace, index + 1)
-                                    onRightClicked: root.showHint("Window Limit: " + (index + 1), "Sets the maximum number of tiled windows allowed on Workspace " + root.selectedWorkspace + " before new windows are routed to the next free workspace.", "Tip: 2 windows is recommended for coding or document reference.")
-                                    Accessible.name: (index + 1) + " windows"
+                                    onRightClicked: root.showHint(root.t("windowLimitN", [index + 1]), root.t("windowLimitBody", [root.selectedWorkspace]), root.t("tipWindowsIsRecommended"))
+                                    Accessible.name: root.tn("windowsN", index + 1)
                                 }
                             }
                         }
 
                         Text {
-                            text: "LAYOUT PRESET"
+                            text: root.t("layoutPreset")
                             color: Color.foreground
                             opacity: 0.65
                             font.family: Style.font.family
@@ -2010,25 +2104,25 @@ ShellUi.BarWidget {
                             Ui.Button {
                                 visible: root.hasCustomPreset(root.selectedWorkspace) || root.hasCustomCap(root.selectedWorkspace) || root.isWorkspaceNative(root.selectedWorkspace)
                                 width: (parent.width - Style.space(6)) / 2
-                                text: "↺ Reset to Default"
+                                text: root.t("resetToDefault")
                                 bordered: true
                                 focusable: true
                                 fontSize: Style.font.caption
                                 onClicked: root.resetWorkspaceToDefault(root.selectedWorkspace)
-                                onRightClicked: root.showHint("Reset Workspace to Default", "Reverts Workspace " + root.selectedWorkspace + " to the global window limit (" + root.cap + ") and default layout preset.", "")
-                                tooltipText: "Reset to default limit (" + root.cap + ") and preset (" + root.autoPresetLabel(root.defaultAutoPresetFor(root.cap)) + ")"
+                                onRightClicked: root.showHint(root.t("resetWorkspaceToDefault"), root.t("resetWsBody", [root.selectedWorkspace, root.cap]), "")
+                                tooltipText: root.t("resetTip", [root.cap, root.autoPresetLabel(root.defaultAutoPresetFor(root.cap))])
                             }
 
                             Ui.Button {
                                 width: (root.hasCustomPreset(root.selectedWorkspace) || root.hasCustomCap(root.selectedWorkspace) || root.isWorkspaceNative(root.selectedWorkspace)) ? ((parent.width - Style.space(6)) / 2) : parent.width
-                                text: root.autoPresetForWorkspace(root.selectedWorkspace) === "none" ? "✓ Native (No Preset)" : "✕ Remove Preset (Native)"
+                                text: root.autoPresetForWorkspace(root.selectedWorkspace) === "none" ? root.t("nativeNoPreset2") : root.t("removePresetNative")
                                 selected: root.autoPresetForWorkspace(root.selectedWorkspace) === "none"
                                 bordered: true
                                 focusable: true
                                 fontSize: Style.font.caption
                                 onClicked: root.setWorkspaceAutoPreset(root.selectedWorkspace, "none")
-                                onRightClicked: root.showHint("Native Layout (No Preset)", "Uses native Hyprland tiling without a window limit or automatic overflow. Open and close as many windows as you like.", "")
-                                tooltipText: "Remove preset on Workspace " + root.selectedWorkspace + ": native tiling, no window limit or automatic overflow"
+                                onRightClicked: root.showHint(root.t("nativeLayoutNoPreset"), root.t("usesNativeHyprlandTiling"), "")
+                                tooltipText: root.t("removePresetTip", [root.selectedWorkspace])
                             }
                         }
 
@@ -2051,7 +2145,7 @@ ShellUi.BarWidget {
                                 Text {
                                     anchors.verticalCenter: parent.verticalCenter
                                     width: parent.width - removeAppPresetBtn.width - Style.space(6)
-                                    text: "App Preset saved (" + root.savedAppsFor(root.selectedWorkspace).length + " apps)"
+                                    text: root.t("appPresetSaved", [root.savedAppsFor(root.selectedWorkspace).length])
                                     color: Color.foreground
                                     font.family: Style.font.family
                                     font.pixelSize: Style.font.caption
@@ -2062,12 +2156,12 @@ ShellUi.BarWidget {
                                 Ui.Button {
                                     id: removeAppPresetBtn
                                     anchors.verticalCenter: parent.verticalCenter
-                                    text: "✕ Remove App Preset"
+                                    text: root.t("removeAppPreset")
                                     bordered: true
                                     focusable: true
                                     fontSize: Math.max(9, Style.font.caption - 1)
                                     onClicked: root.clearWorkspaceLayout(root.selectedWorkspace)
-                                    tooltipText: "Remove saved App Preset for Workspace " + root.selectedWorkspace
+                                    tooltipText: root.t("removeSavedTip", [root.selectedWorkspace])
                                 }
                             }
                         }
@@ -2076,14 +2170,14 @@ ShellUi.BarWidget {
                         Ui.Button {
                             visible: root.effectiveCapFor(root.selectedWorkspace) === 1
                             width: parent.width
-                            text: "□ One Window Tiling"
+                            text: root.t("oneWindowTiling")
                             selected: !root.isWorkspaceNative(root.selectedWorkspace)
                             bordered: true
                             focusable: true
                             onClicked: root.setWorkspaceAutoPreset(root.selectedWorkspace, "side-by-side")
-                            onRightClicked: root.showHint("One Window Tiling", "Keeps one tiled window on this workspace. Newly opened windows move to the next workspace with room.", "Tip: Select Native to remove the window limit.")
-                            tooltipText: "Apply one-window tiling with automatic overflow"
-                            Accessible.name: "One window tiling"
+                            onRightClicked: root.showHint(root.t("oneWindowTiling2"), root.t("keepsOneTiledWindow"), root.t("tipSelectNativeTo"))
+                            tooltipText: root.t("applyOneWindowTiling")
+                            Accessible.name: root.t("oneWindowTiling3")
                         }
 
                         // Presets for Cap = 2
@@ -2093,23 +2187,23 @@ ShellUi.BarWidget {
                             spacing: Style.space(6)
                             Ui.Button {
                                 width: (parent.width - Style.space(6)) / 2
-                                text: "⬌ Side-by-Side"
+                                text: root.t("sideBySide2")
                                 selected: root.autoPresetForWorkspace(root.selectedWorkspace) === "side-by-side"
                                 bordered: true
                                 focusable: true
                                 onClicked: root.toggleWorkspaceAutoPreset(root.selectedWorkspace, "side-by-side")
-                                onRightClicked: root.showHint("Side-by-Side Preset", "Arranges 2 windows into two equal vertical columns side-by-side (left and right).", "Tip: Click again to toggle back to native layout.")
-                                tooltipText: "Side-by-side columns (left and right). Click again or Reset to remove preset."
+                                onRightClicked: root.showHint(root.t("sideBySidePreset"), root.t("arrangesWindowsIntoTwo"), root.t("tipClickAgainTo"))
+                                tooltipText: root.t("sideBySideColumns")
                             }
                             Ui.Button {
                                 width: (parent.width - Style.space(6)) / 2
-                                text: "⬍ Stacked"
+                                text: root.t("stacked2")
                                 selected: root.autoPresetForWorkspace(root.selectedWorkspace) === "stacked"
                                 bordered: true
                                 focusable: true
                                 onClicked: root.toggleWorkspaceAutoPreset(root.selectedWorkspace, "stacked")
-                                onRightClicked: root.showHint("Stacked Preset", "Arranges 2 windows into two horizontal rows stacked vertically (top and bottom).", "Tip: Great for vertical monitors or wide Ultrawides.")
-                                tooltipText: "Vertically stacked rows (top and bottom). Click again or Reset to remove preset."
+                                onRightClicked: root.showHint(root.t("stackedPreset"), root.t("arrangesWindowsIntoTwo2"), root.t("tipGreatForVertical"))
+                                tooltipText: root.t("verticallyStackedRowsTop")
                             }
                         }
 
@@ -2120,33 +2214,33 @@ ShellUi.BarWidget {
                             spacing: Style.space(6)
                             Ui.Button {
                                 width: (parent.width - 2 * Style.space(6)) / 3
-                                text: "◨ Master L"
+                                text: root.t("masterL")
                                 selected: root.autoPresetForWorkspace(root.selectedWorkspace) === "master-left"
                                 bordered: true
                                 focusable: true
                                 onClicked: root.toggleWorkspaceAutoPreset(root.selectedWorkspace, "master-left")
-                                onRightClicked: root.showHint("Master Left Preset", "Positions 1 large master window on the left and 2 stacked windows on the right.", "Tip: Perfect for editor on left and terminal/browser on right.")
-                                tooltipText: "1 master on left, 2 stacked on right. Click again or Reset to remove preset."
+                                onRightClicked: root.showHint(root.t("masterLeftPreset"), root.t("positionsLargeMasterWindow"), root.t("tipPerfectForEditor"))
+                                tooltipText: root.t("masterOnLeftStacked")
                             }
                             Ui.Button {
                                 width: (parent.width - 2 * Style.space(6)) / 3
-                                text: "◧ Master R"
+                                text: root.t("masterR")
                                 selected: root.autoPresetForWorkspace(root.selectedWorkspace) === "master-right"
                                 bordered: true
                                 focusable: true
                                 onClicked: root.toggleWorkspaceAutoPreset(root.selectedWorkspace, "master-right")
-                                onRightClicked: root.showHint("Master Right Preset", "Positions 1 large master window on the right and 2 stacked windows on the left.", "")
-                                tooltipText: "2 stacked on left, 1 master on right. Click again or Reset to remove preset."
+                                onRightClicked: root.showHint(root.t("masterRightPreset"), root.t("positionsLargeMasterWindow2"), "")
+                                tooltipText: root.t("stackedOnLeftMaster")
                             }
                             Ui.Button {
                                 width: (parent.width - 2 * Style.space(6)) / 3
-                                text: "||| Columns"
+                                text: root.t("columns2")
                                 selected: root.autoPresetForWorkspace(root.selectedWorkspace) === "columns"
                                 bordered: true
                                 focusable: true
                                 onClicked: root.toggleWorkspaceAutoPreset(root.selectedWorkspace, "columns")
-                                onRightClicked: root.showHint("Columns Preset (3)", "Divides the workspace into 3 equal side-by-side vertical columns across your display.", "Tip: Ideal for multi-column terminal or document monitoring.")
-                                tooltipText: "3 columns side-by-side. Click again or Reset to remove preset."
+                                onRightClicked: root.showHint(root.t("columnsPreset"), root.t("dividesTheWorkspaceInto"), root.t("tipIdealForMulti"))
+                                tooltipText: root.t("columnsSideBySide")
                             }
                         }
 
@@ -2158,43 +2252,43 @@ ShellUi.BarWidget {
                             spacing: Style.space(6)
                             Ui.Button {
                                 width: (content.width - Style.space(6)) / 2
-                                text: "▦ 2×2 Grid"
+                                text: root.t("grid2")
                                 selected: root.autoPresetForWorkspace(root.selectedWorkspace) === "grid"
                                 bordered: true
                                 focusable: true
                                 onClicked: root.toggleWorkspaceAutoPreset(root.selectedWorkspace, "grid")
-                                onRightClicked: root.showHint("2×2 Grid Preset", "Arranges 4 windows into a balanced four-quadrant 2×2 grid.", "")
-                                tooltipText: "2×2 grid arrangement. Click again or Reset to remove preset."
+                                onRightClicked: root.showHint(root.t("gridPreset"), root.t("arrangesWindowsIntoA"), "")
+                                tooltipText: root.t("gridArrangementClickAgain")
                             }
                             Ui.Button {
                                 width: (content.width - Style.space(6)) / 2
-                                text: "◨ Master L"
+                                text: root.t("masterL")
                                 selected: root.autoPresetForWorkspace(root.selectedWorkspace) === "master-left"
                                 bordered: true
                                 focusable: true
                                 onClicked: root.toggleWorkspaceAutoPreset(root.selectedWorkspace, "master-left")
-                                onRightClicked: root.showHint("Master Left Preset", "1 large master window on the left, with 3 stacked windows on the right.", "")
-                                tooltipText: "1 master on left, 3 stacked on right. Click again or Reset to remove preset."
+                                onRightClicked: root.showHint(root.t("masterLeftPreset"), root.t("largeMasterWindowOn"), "")
+                                tooltipText: root.t("masterOnLeftStacked2")
                             }
                             Ui.Button {
                                 width: (content.width - Style.space(6)) / 2
-                                text: "◧ Master R"
+                                text: root.t("masterR")
                                 selected: root.autoPresetForWorkspace(root.selectedWorkspace) === "master-right"
                                 bordered: true
                                 focusable: true
                                 onClicked: root.toggleWorkspaceAutoPreset(root.selectedWorkspace, "master-right")
-                                onRightClicked: root.showHint("Master Right Preset", "1 large master window on the right, with 3 stacked windows on the left.", "")
-                                tooltipText: "3 stacked on left, 1 master on right. Click again or Reset to remove preset."
+                                onRightClicked: root.showHint(root.t("masterRightPreset"), root.t("largeMasterWindowOn2"), "")
+                                tooltipText: root.t("stackedOnLeftMaster2")
                             }
                             Ui.Button {
                                 width: (content.width - Style.space(6)) / 2
-                                text: "|||| Columns"
+                                text: root.t("columns3")
                                 selected: root.autoPresetForWorkspace(root.selectedWorkspace) === "columns"
                                 bordered: true
                                 focusable: true
                                 onClicked: root.toggleWorkspaceAutoPreset(root.selectedWorkspace, "columns")
-                                onRightClicked: root.showHint("Columns Preset (4)", "Divides the workspace into 4 equal side-by-side vertical columns across your display.", "")
-                                tooltipText: "4 columns side-by-side. Click again or Reset to remove preset."
+                                onRightClicked: root.showHint(root.t("columnsPreset2"), root.t("dividesTheWorkspaceInto2"), "")
+                                tooltipText: root.t("columnsSideBySide2")
                             }
                         }
                     }
@@ -2222,8 +2316,8 @@ ShellUi.BarWidget {
 
                                 Text {
                                     text: root.hasSavedLayout(root.selectedWorkspace)
-                                        ? "App Preset: " + root.savedLayoutSummary(root.selectedWorkspace)
-                                        : "No App Preset saved yet"
+                                        ? root.t("appPresetSummary", [root.savedLayoutSummary(root.selectedWorkspace)])
+                                        : root.t("noAppPresetSaved")
                                     color: Color.foreground
                                     font.family: Style.font.family
                                     font.pixelSize: Style.font.bodySmall
@@ -2232,7 +2326,7 @@ ShellUi.BarWidget {
 
                                 Text {
                                     width: parent.width
-                                    text: "× removes an app from the App Preset; it does not close its open windows."
+                                    text: root.t("removesAnAppFrom")
                                     wrapMode: Text.Wrap
                                     color: Color.foreground
                                     opacity: 0.65
@@ -2297,7 +2391,7 @@ ShellUi.BarWidget {
                                                     elide: Text.ElideRight
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     textFormat: Text.PlainText
-                                                    text: chipRect.modelData.name || chipRect.modelData.class || "App"
+                                                    text: chipRect.modelData.name || chipRect.modelData.class || root.t("app")
                                                     color: chipRect.isMissing ? Color.urgent : Color.foreground
                                                     font.family: Style.font.family
                                                     font.pixelSize: Style.font.caption
@@ -2328,7 +2422,7 @@ ShellUi.BarWidget {
                                                     }
                                                     Ui.PanelToolTip {
                                                         visible: chipMouse.containsMouse
-                                                        text: "Remove " + (chipRect.modelData.name || chipRect.modelData.class || "app") + " from saved layout"
+                                                        text: root.t("removeFromLayout", [chipRect.modelData.name || chipRect.modelData.class || root.t("appLower")])
                                                     }
                                                 }
                                             }
@@ -2342,7 +2436,7 @@ ShellUi.BarWidget {
                                     width: parent.width
                                     wrapMode: Text.Wrap
                                     textFormat: Text.PlainText
-                                    text: "Last restore failed:\n" + failureText + "\nOpen the app manually and try Restore App Preset again. The × removes it from the saved preset."
+                                    text: root.t("lastRestoreFailed", [failureText])
                                     color: Color.urgent
                                     font.family: Style.font.family
                                     font.pixelSize: Style.font.caption
@@ -2352,7 +2446,7 @@ ShellUi.BarWidget {
                                     visible: !root.hasSavedLayout(root.selectedWorkspace)
                                     width: parent.width
                                     wrapMode: Text.Wrap
-                                    text: "Open and arrange windows on Workspace " + root.selectedWorkspace + ", then click 'Save Current Layout' below."
+                                    text: root.t("openArrange", [root.selectedWorkspace])
                                     color: Color.foreground
                                     opacity: 0.65
                                     font.family: Style.font.family
@@ -2386,7 +2480,7 @@ ShellUi.BarWidget {
                                         anchors.verticalCenter: parent.verticalCenter
                                     }
                                     Text {
-                                        text: "Existing Windows on Workspace " + (root.restoreConflict ? root.restoreConflict.workspace : "")
+                                        text: root.t("existingWindows", [root.restoreConflict ? root.restoreConflict.workspace : ""])
                                         color: Color.urgent
                                         font.family: Style.font.family
                                         font.pixelSize: Style.font.bodySmall
@@ -2397,7 +2491,7 @@ ShellUi.BarWidget {
 
                                 Text {
                                     width: parent.width
-                                    text: "Workspace has " + (root.restoreConflict ? root.restoreConflict.conflict_count : 0) + " open window(s) not in this preset:"
+                                    text: root.t("wsHasConflicts", [root.restoreConflict ? root.restoreConflict.conflict_count : 0])
                                     color: Color.foreground
                                     opacity: 0.85
                                     font.family: Style.font.family
@@ -2424,7 +2518,7 @@ ShellUi.BarWidget {
                                                 anchors.centerIn: parent
                                                 width: parent.width - Style.space(8)
                                                 textFormat: Text.PlainText
-                                                text: modelData.title ? (modelData.class + " (" + modelData.title + ")") : (modelData.class || "Window")
+                                                text: modelData.title ? (modelData.class + " (" + modelData.title + ")") : (modelData.class || root.t("window2"))
                                                 elide: Text.ElideMiddle
                                                 color: Color.foreground
                                                 font.family: Style.font.family
@@ -2436,7 +2530,7 @@ ShellUi.BarWidget {
 
                                 Text {
                                     width: parent.width
-                                    text: "How would you like to handle them before restoring?"
+                                    text: root.t("howWouldYouLike")
                                     color: Color.foreground
                                     opacity: 0.85
                                     font.family: Style.font.family
@@ -2454,23 +2548,23 @@ ShellUi.BarWidget {
                                         spacing: Style.space(6)
                                         Ui.Button {
                                             width: (parent.width - Style.space(6)) / 2
-                                            text: "➜ Move to WS " + (root.restoreConflict ? root.restoreConflict.next_free_workspace : "")
+                                            text: root.t("moveToWs", [root.restoreConflict ? root.restoreConflict.next_free_workspace : ""])
                                             bordered: true
                                             focusable: true
                                             fontSize: Style.font.caption
                                             onClicked: root.restoreWorkspaceApps(root.selectedWorkspace, "move")
-                                            onRightClicked: root.showHint("Move Conflicting Windows", "Moves all extra open windows from Workspace " + root.selectedWorkspace + " to empty Workspace " + (root.restoreConflict ? root.restoreConflict.next_free_workspace : "") + ", sends a desktop notification, and restores the preset.", "")
-                                            tooltipText: "Move conflicting windows to the next empty workspace (with desktop notification)"
+                                            onRightClicked: root.showHint(root.t("moveConflictingWindows"), root.t("moveBody", [root.selectedWorkspace, root.restoreConflict ? root.restoreConflict.next_free_workspace : ""]), "")
+                                            tooltipText: root.t("moveConflictingWindowsTo")
                                         }
                                         Ui.Button {
                                             width: (parent.width - Style.space(6)) / 2
-                                            text: "✕ Close"
+                                            text: root.t("close")
                                             bordered: true
                                             focusable: true
                                             fontSize: Style.font.caption
                                             onClicked: root.restoreWorkspaceApps(root.selectedWorkspace, "close")
-                                            onRightClicked: root.showHint("Close Conflicting Windows", "Closes the extra open windows on Workspace " + root.selectedWorkspace + " and restores the saved preset.", "")
-                                            tooltipText: "Close existing windows and restore the saved layout"
+                                            onRightClicked: root.showHint(root.t("closeConflictingWindows"), root.t("closeBody", [root.selectedWorkspace]), "")
+                                            tooltipText: root.t("closeExistingWindowsAnd")
                                         }
                                     }
 
@@ -2479,26 +2573,26 @@ ShellUi.BarWidget {
                                         spacing: Style.space(6)
                                         Ui.Button {
                                             width: (parent.width - Style.space(6)) / 2
-                                            text: "◻ Keep (Float)"
+                                            text: root.t("keepFloat")
                                             bordered: true
                                             focusable: true
                                             fontSize: Style.font.caption
                                             onClicked: root.restoreWorkspaceApps(root.selectedWorkspace, "keep")
-                                            onRightClicked: root.showHint("Keep Conflicting Windows", "Floats the extra open windows on Workspace " + root.selectedWorkspace + " so they remain visible without breaking the tiled preset layout.", "")
-                                            tooltipText: "Keep existing windows on this workspace as floating windows"
+                                            onRightClicked: root.showHint(root.t("keepConflictingWindows"), root.t("keepBody", [root.selectedWorkspace]), "")
+                                            tooltipText: root.t("keepExistingWindowsOn")
                                         }
                                         Ui.Button {
                                             width: (parent.width - Style.space(6)) / 2
-                                            text: "Cancel"
+                                            text: root.t("cancel")
                                             bordered: true
                                             focusable: true
                                             fontSize: Style.font.caption
                                             onClicked: {
                                                 root.restoreConflict = null
-                                                root.lastMessage = "Restore cancelled."
+                                                root.lastMessage = root.t("restoreCancelled")
                                             }
-                                            onRightClicked: root.showHint("Cancel Restore", "Aborts restoring the App Preset and leaves all windows as they are.", "")
-                                            tooltipText: "Cancel restoring this preset"
+                                            onRightClicked: root.showHint(root.t("cancelRestore"), root.t("abortsRestoringTheApp"), "")
+                                            tooltipText: root.t("cancelRestoringThisPreset")
                                         }
                                     }
                                 }
@@ -2514,64 +2608,64 @@ ShellUi.BarWidget {
                                 width: (root.hasSavedLayout(root.selectedWorkspace) && root.savedAppsFor(root.selectedWorkspace).length > 0)
                                     ? (parent.width - Style.space(6)) / 2
                                     : parent.width
-                                text: "Save App Preset"
+                                text: root.t("saveAppPreset")
                                 bordered: true
                                 focusable: true
                                 onClicked: root.captureWorkspaceLayout(root.selectedWorkspace)
-                                onRightClicked: root.showHint("Save App Preset", "Snapshots all open windows on Workspace " + root.selectedWorkspace + ", including positions, sizes, desktop files, and launch commands.", "Tip: Open and arrange your apps first, then click here to save.")
-                                tooltipText: "Snapshot current windows and arranged positions as App Preset on Workspace " + root.selectedWorkspace
+                                onRightClicked: root.showHint(root.t("saveAppPreset"), root.t("saveBody", [root.selectedWorkspace]), root.t("tipOpenAndArrange"))
+                                tooltipText: root.t("saveTip", [root.selectedWorkspace])
                             }
 
                             Ui.Button {
                                 visible: root.hasSavedLayout(root.selectedWorkspace) && root.savedAppsFor(root.selectedWorkspace).length > 0
                                 width: (parent.width - Style.space(6)) / 2
-                                text: "Restore App Preset"
+                                text: root.t("restoreAppPreset")
                                 bordered: true
                                 focusable: true
                                 onClicked: root.restoreWorkspaceApps(root.selectedWorkspace)
-                                onRightClicked: root.showHint("Restore App Preset", "Relaunches missing apps and restores windows into their exact saved arrangement. If conflicting windows are open, you will be prompted.", "Tip: Enable 'Auto-move on restore' in settings to auto-move conflicts.")
-                                tooltipText: "Launch missing apps and restore window layout for Workspace " + root.selectedWorkspace
+                                onRightClicked: root.showHint(root.t("restoreAppPreset"), root.t("relaunchesMissingAppsAnd"), root.t("tipEnableAutoMove"))
+                                tooltipText: root.t("restoreTip", [root.selectedWorkspace])
                             }
                         }
 
                         Ui.Button {
                             visible: root.hasSavedLayout(root.selectedWorkspace)
                             width: parent.width
-                            text: "✕ Remove App Preset"
+                            text: root.t("removeAppPreset")
                             bordered: true
                             focusable: true
                             fontSize: Style.font.caption
                             onClicked: root.clearWorkspaceLayout(root.selectedWorkspace)
-                            onRightClicked: root.showHint("Remove App Preset", "Deletes the saved layout for Workspace " + root.selectedWorkspace + " and returns it to automatic Presets mode. Open windows remain open.", "")
-                            tooltipText: "Delete saved layout and return Workspace " + root.selectedWorkspace + " to Presets mode"
+                            onRightClicked: root.showHint(root.t("removeAppPreset2"), root.t("removeBody", [root.selectedWorkspace]), "")
+                            tooltipText: root.t("removeTip", [root.selectedWorkspace])
                         }
 
                         // Toggles
                         Ui.Toggle {
                             width: parent.width
-                            label: "Save apps & show icons"
-                            description: "Display app icons in the workspace bar card"
+                            label: root.t("saveAppsShowIcons")
+                            description: root.t("displayAppIconsIn")
                             checked: root.workspaceSaveApps(root.selectedWorkspace)
                             onClicked: root.toggleWorkspaceSaveApps(root.selectedWorkspace)
 
                             MouseArea {
                                 anchors.fill: parent
                                 acceptedButtons: Qt.RightButton
-                                onClicked: root.showHint("Save Apps & Show Icons", "Saves the application desktop entries with the layout and displays their app icons on the workspace card.", "")
+                                onClicked: root.showHint(root.t("saveAppsShowIcons2"), root.t("savesTheApplicationDesktop"), "")
                             }
                         }
 
                         Ui.Toggle {
                             width: parent.width
-                            label: "Autostart on session startup"
-                            description: "Automatically launch saved apps on startup"
+                            label: root.t("autostartOnSessionStartup")
+                            description: root.t("automaticallyLaunchSavedApps")
                             checked: root.workspaceAutostart(root.selectedWorkspace)
                             onClicked: root.toggleWorkspaceAutostart(root.selectedWorkspace)
 
                             MouseArea {
                                 anchors.fill: parent
                                 acceptedButtons: Qt.RightButton
-                                onClicked: root.showHint("Autostart on Startup", "Automatically launches this workspace's saved applications into their saved positions when you log into your desktop session.", "Tip: Set this on daily-driver workspaces for instant readiness.")
+                                onClicked: root.showHint(root.t("autostartOnStartup"), root.t("automaticallyLaunchesThisWor"), root.t("tipSetThisOn"))
                             }
                         }
                     }
@@ -2585,7 +2679,7 @@ ShellUi.BarWidget {
                 spacing: Style.space(6)
 
                 Text {
-                    text: "DEFAULT WINDOW LIMIT (ALL WORKSPACES)"
+                    text: root.t("defaultWindowLimitAll")
                     color: Color.foreground
                     opacity: 0.65
                     font.family: Style.font.family
@@ -2607,15 +2701,15 @@ ShellUi.BarWidget {
                             bordered: true
                             focusable: true
                             onClicked: root.updateSetting("maxWindows", index + 1)
-                            onRightClicked: root.showHint("Global Limit: " + (index + 1), "Sets the default maximum window limit (" + (index + 1) + " windows) applied to all workspaces without custom overrides.", "")
-                            Accessible.name: (index + 1) + " windows"
+                            onRightClicked: root.showHint(root.t("globalLimitN", [index + 1]), root.t("globalLimitBody", [index + 1]), "")
+                            Accessible.name: root.tn("windowsN", index + 1)
                         }
                     }
                 }
 
                 Text {
                     visible: root.cap > 1
-                    text: "DEFAULT LAYOUT PRESET"
+                    text: root.t("defaultLayoutPreset")
                     color: Color.foreground
                     opacity: 0.65
                     font.family: Style.font.family
@@ -2630,23 +2724,23 @@ ShellUi.BarWidget {
                     spacing: Style.space(6)
                     Ui.Button {
                         width: (parent.width - Style.space(6)) / 2
-                        text: "⬌ Side-by-Side"
+                        text: root.t("sideBySide2")
                         selected: (root.defaultAutoPresets["2"] || "side-by-side") === "side-by-side"
                         bordered: true
                         focusable: true
                         onClicked: root.setDefaultAutoPreset("2", "side-by-side")
-                        onRightClicked: root.showHint("Default Preset (Side-by-Side)", "Sets side-by-side columns as the default layout preset for 2 windows across all workspaces.", "")
-                        tooltipText: "Default to side-by-side columns"
+                        onRightClicked: root.showHint(root.t("defaultPresetSideBy"), root.t("setsSideBySide"), "")
+                        tooltipText: root.t("defaultToSideBy")
                     }
                     Ui.Button {
                         width: (parent.width - Style.space(6)) / 2
-                        text: "⬍ Stacked"
+                        text: root.t("stacked2")
                         selected: root.defaultAutoPresets["2"] === "stacked"
                         bordered: true
                         focusable: true
                         onClicked: root.setDefaultAutoPreset("2", "stacked")
-                        onRightClicked: root.showHint("Default Preset (Stacked)", "Sets stacked rows as the default layout preset for 2 windows across all workspaces.", "")
-                        tooltipText: "Default to vertically stacked rows"
+                        onRightClicked: root.showHint(root.t("defaultPresetStacked"), root.t("setsStackedRowsAs"), "")
+                        tooltipText: root.t("defaultToVerticallyStacked")
                     }
                 }
 
@@ -2657,33 +2751,33 @@ ShellUi.BarWidget {
                     spacing: Style.space(6)
                     Ui.Button {
                         width: (parent.width - Style.space(12)) / 3
-                        text: "◨ Master L"
+                        text: root.t("masterL")
                         selected: (root.defaultAutoPresets["3"] || "master-left") === "master-left"
                         bordered: true
                         focusable: true
                         onClicked: root.setDefaultAutoPreset("3", "master-left")
-                        onRightClicked: root.showHint("Default Preset (Master Left)", "Sets 1 master on left, 2 stacked on right as the default layout preset for 3 windows.", "")
-                        tooltipText: "Default to 1 master on left, 2 stacked on right"
+                        onRightClicked: root.showHint(root.t("defaultPresetMasterLeft"), root.t("setsMasterOnLeft"), "")
+                        tooltipText: root.t("defaultToMasterOn")
                     }
                     Ui.Button {
                         width: (parent.width - Style.space(12)) / 3
-                        text: "◧ Master R"
+                        text: root.t("masterR")
                         selected: root.defaultAutoPresets["3"] === "master-right"
                         bordered: true
                         focusable: true
                         onClicked: root.setDefaultAutoPreset("3", "master-right")
-                        onRightClicked: root.showHint("Default Preset (Master Right)", "Sets 1 master on right, 2 stacked on left as the default layout preset for 3 windows.", "")
-                        tooltipText: "Default to 2 stacked on left, 1 master on right"
+                        onRightClicked: root.showHint(root.t("defaultPresetMasterRight"), root.t("setsMasterOnRight"), "")
+                        tooltipText: root.t("defaultToStackedOn")
                     }
                     Ui.Button {
                         width: (parent.width - Style.space(12)) / 3
-                        text: "||| Columns"
+                        text: root.t("columns2")
                         selected: root.defaultAutoPresets["3"] === "columns"
                         bordered: true
                         focusable: true
                         onClicked: root.setDefaultAutoPreset("3", "columns")
-                        onRightClicked: root.showHint("Default Preset (Columns)", "Sets 3 equal side-by-side vertical columns as the default layout preset for 3 windows.", "")
-                        tooltipText: "Default to 3 columns side-by-side"
+                        onRightClicked: root.showHint(root.t("defaultPresetColumns"), root.t("setsEqualSideBy"), "")
+                        tooltipText: root.t("defaultToColumnsSide")
                     }
                 }
 
@@ -2695,43 +2789,43 @@ ShellUi.BarWidget {
                     spacing: Style.space(6)
                     Ui.Button {
                         width: (content.width - Style.space(6)) / 2
-                        text: "▦ 2×2 Grid"
+                        text: root.t("grid2")
                         selected: (root.defaultAutoPresets["4"] || "grid") === "grid"
                         bordered: true
                         focusable: true
                         onClicked: root.setDefaultAutoPreset("4", "grid")
-                        onRightClicked: root.showHint("Default Preset (2×2 Grid)", "Sets 2×2 four-quadrant grid as the default layout preset for 4 windows.", "")
-                        tooltipText: "Default to 2×2 grid"
+                        onRightClicked: root.showHint(root.t("defaultPresetGrid"), root.t("setsFourQuadrantGrid"), "")
+                        tooltipText: root.t("defaultToGrid")
                     }
                     Ui.Button {
                         width: (content.width - Style.space(6)) / 2
-                        text: "◨ Master L"
+                        text: root.t("masterL")
                         selected: root.defaultAutoPresets["4"] === "master-left"
                         bordered: true
                         focusable: true
                         onClicked: root.setDefaultAutoPreset("4", "master-left")
-                        onRightClicked: root.showHint("Default Preset (Master Left)", "Sets 1 master on left, 3 stacked on right as the default layout preset for 4 windows.", "")
-                        tooltipText: "Default to master on left"
+                        onRightClicked: root.showHint(root.t("defaultPresetMasterLeft"), root.t("setsMasterOnLeft2"), "")
+                        tooltipText: root.t("defaultToMasterOn2")
                     }
                     Ui.Button {
                         width: (content.width - Style.space(6)) / 2
-                        text: "◧ Master R"
+                        text: root.t("masterR")
                         selected: root.defaultAutoPresets["4"] === "master-right"
                         bordered: true
                         focusable: true
                         onClicked: root.setDefaultAutoPreset("4", "master-right")
-                        onRightClicked: root.showHint("Default Preset (Master Right)", "Sets 1 master on right, 3 stacked on left as the default layout preset for 4 windows.", "")
-                        tooltipText: "Default to master on right"
+                        onRightClicked: root.showHint(root.t("defaultPresetMasterRight"), root.t("setsMasterOnRight2"), "")
+                        tooltipText: root.t("defaultToMasterOn3")
                     }
                     Ui.Button {
                         width: (content.width - Style.space(6)) / 2
-                        text: "|||| Columns"
+                        text: root.t("columns3")
                         selected: root.defaultAutoPresets["4"] === "columns"
                         bordered: true
                         focusable: true
                         onClicked: root.setDefaultAutoPreset("4", "columns")
-                        onRightClicked: root.showHint("Default Preset (Columns)", "Sets 4 equal side-by-side vertical columns as the default layout preset for 4 windows.", "")
-                        tooltipText: "Default to 4 columns side-by-side"
+                        onRightClicked: root.showHint(root.t("defaultPresetColumns"), root.t("setsEqualSideBy2"), "")
+                        tooltipText: root.t("defaultToColumnsSide2")
                     }
                 }
 
@@ -2743,7 +2837,7 @@ ShellUi.BarWidget {
                 }
 
                 Text {
-                    text: "PRESET & APP PRESET MANAGEMENT (ALL WORKSPACES)"
+                    text: root.t("presetAppPresetManagement")
                     color: Color.foreground
                     opacity: 0.65
                     font.family: Style.font.family
@@ -2757,81 +2851,53 @@ ShellUi.BarWidget {
 
                     Ui.Button {
                         width: (parent.width - Style.space(6)) / 2
-                        text: "✕ Remove All Presets"
+                        text: root.t("removeAllPresets")
                         bordered: true
                         focusable: true
                         fontSize: Style.font.caption
                         onClicked: root.removeAllWorkspacePresets()
-                        onRightClicked: root.showHint("Remove All Presets", "Sets all workspaces to Native tiling without layout presets or automatic overflow.", "")
-                        tooltipText: "Set all workspaces to Native Hyprland tiling (no presets or overflow)"
+                        onRightClicked: root.showHint(root.t("removeAllPresets2"), root.t("setsAllWorkspacesTo"), "")
+                        tooltipText: root.t("setAllWorkspacesTo")
                     }
 
                     Ui.Button {
                         width: (parent.width - Style.space(6)) / 2
-                        text: "↺ Reset All to Default"
+                        text: root.t("resetAllToDefault")
                         bordered: true
                         focusable: true
                         fontSize: Style.font.caption
                         onClicked: root.resetAllWorkspacesToDefault()
-                        onRightClicked: root.showHint("Reset All Workspaces", "Removes all custom limits and presets, returning every workspace to global defaults (" + root.cap + " limit, " + root.autoPresetLabel(root.defaultAutoPresetFor(root.cap)) + ").", "")
-                        tooltipText: "Reset all workspaces to global default limit and preset"
+                        onRightClicked: root.showHint(root.t("resetAllWorkspaces"), root.t("resetAllBody", [root.cap, root.autoPresetLabel(root.defaultAutoPresetFor(root.cap))]), "")
+                        tooltipText: root.t("resetAllWorkspacesTo")
                     }
                 }
 
                 Ui.Button {
                     visible: root.hasAnyAppPreset
                     width: parent.width
-                    text: "✕ Remove All App Presets"
+                    text: root.t("removeAllAppPresets")
                     bordered: true
                     focusable: true
                     fontSize: Style.font.caption
                     onClicked: root.removeAllAppPresets()
-                    onRightClicked: root.showHint("Remove All App Presets", "Deletes all saved app presets and autostart settings across all workspaces. All workspaces return to Presets mode.", "")
-                    tooltipText: "Delete all saved app presets across all workspaces"
+                    onRightClicked: root.showHint(root.t("removeAllAppPresets2"), root.t("deletesAllSavedApp"), "")
+                    tooltipText: root.t("deleteAllSavedApp")
                 }
             }
 
             Ui.Button {
                 width: parent.width
-                text: "Clear All Presets & App Presets"
+                text: root.t("clearAllPresetsApp")
                 bordered: true
                 focusable: true
                 onClicked: root.clearAllPresets()
-                tooltipText: "Clear all workspace layouts, limits, saved apps and autostart settings"
-            }
-
-            Ui.Toggle {
-                width: parent.width
-                label: "Right-click help hints"
-                description: "Show explanations & tips when right-clicking controls"
-                checked: root.rightClickHintsEnabled
-                onClicked: root.updateSetting("rightClickHints", !root.rightClickHintsEnabled)
-
-                MouseArea {
-                    anchors.fill: parent
-                    acceptedButtons: Qt.RightButton
-                    onClicked: root.showHint("Right-Click Hints", "Toggle contextual help hints on right-click across all controls in the plugin.", "Tip: You can turn this off anytime if you prefer quiet operation.")
-                }
-            }
-
-            Ui.Toggle {
-                width: parent.width
-                label: "Auto-move on restore"
-                description: "Move existing windows to next free workspace without asking"
-                checked: root.autoMoveOnRestore
-                onClicked: root.updateSetting("autoMoveOnRestore", !root.autoMoveOnRestore)
-
-                MouseArea {
-                    anchors.fill: parent
-                    acceptedButtons: Qt.RightButton
-                    onClicked: root.showHint("Auto-Move On Restore", "When restoring an App Preset on an occupied workspace, automatically move existing windows to the next empty workspace with a desktop notification.", "Tip: Ideal for fast, seamless multi-app switching.")
-                }
+                tooltipText: root.t("clearAllWorkspaceLayouts")
             }
 
             Text {
                 width: parent.width
                 textFormat: Text.PlainText
-                text: root.failed ? root.lastMessage : (root.tilingActive ? root.lastMessage : "Your windows stay where you put them.")
+                text: root.failed ? root.lastMessage : (root.tilingActive ? root.lastMessage : root.t("yourWindowsStayWhere"))
                 wrapMode: Text.Wrap
                 color: root.failed ? Color.urgent : Color.foreground
                 opacity: root.failed ? 1 : 0.6
@@ -2840,165 +2906,6 @@ ShellUi.BarWidget {
             }
             } // end workspaceControlsView
 
-            // USER MANUAL VIEW (Visible when showManualView is true)
-            Column {
-                id: manualView
-                visible: root.showManualView
-                width: parent.width
-                spacing: Style.space(10)
-
-                Ui.Button {
-                    width: parent.width
-                    text: "← Back to Workspace Controls"
-                    bordered: true
-                    focusable: true
-                    onClicked: root.showManualView = false
-                }
-
-                // Section 1: Presets
-                Rectangle {
-                    width: parent.width
-                    implicitHeight: sec1Col.implicitHeight + Style.space(16)
-                    radius: Style.space(6)
-                    color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05)
-                    border.width: 1
-                    border.color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.15)
-
-                    Column {
-                        id: sec1Col
-                        anchors.fill: parent
-                        anchors.margins: Style.space(8)
-                        spacing: Style.space(4)
-
-                        Text {
-                            text: "1. Presets (Dynamic Tiling & Overflow)"
-                            color: Theme.Color.accent
-                            font.family: Style.font.family
-                            font.pixelSize: Theme.Style.font.bodySmall
-                            font.bold: true
-                        }
-                        Text {
-                            width: parent.width
-                            text: "• Sets a window limit (1 to 4) per workspace or globally.\n• When full, newly opened windows automatically move to the next free workspace.\n• Choose layout presets: Side-by-Side (2), Stacked (2), Master Left/Right (3-4), Columns (3-4), or 2×2 Grid (4).\n• Manual moves (Super+Shift+<number>) intentionally override the limit."
-                            color: Color.foreground
-                            opacity: 0.85
-                            font.family: Style.font.family
-                            font.pixelSize: Style.font.caption
-                            wrapMode: Text.Wrap
-                        }
-                    }
-                }
-
-                // Section 2: App Presets
-                Rectangle {
-                    width: parent.width
-                    implicitHeight: sec2Col.implicitHeight + Style.space(16)
-                    radius: Style.space(6)
-                    color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05)
-                    border.width: 1
-                    border.color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.15)
-
-                    Column {
-                        id: sec2Col
-                        anchors.fill: parent
-                        anchors.margins: Style.space(8)
-                        spacing: Style.space(4)
-
-                        Text {
-                            text: "2. App Presets (Saved Workspaces)"
-                            color: Theme.Color.accent
-                            font.family: Style.font.family
-                            font.pixelSize: Theme.Style.font.bodySmall
-                            font.bold: true
-                        }
-                        Text {
-                            width: parent.width
-                            text: "• Lets you open, close and arrange windows freely, even without a saved preset.\n• Disables automatic overflow moves so your arranged layout is preserved.\n• Open and arrange your apps, then click 'Save App Preset'.\n• Click 'Restore App Preset' anytime to relaunch and restore layout.\n• Enable 'Autostart' to launch them automatically on session login."
-                            color: Color.foreground
-                            opacity: 0.85
-                            font.family: Style.font.family
-                            font.pixelSize: Style.font.caption
-                            wrapMode: Text.Wrap
-                        }
-                    }
-                }
-
-                // Section 3: Conflict Handling
-                Rectangle {
-                    width: parent.width
-                    implicitHeight: sec3Col.implicitHeight + Style.space(16)
-                    radius: Style.space(6)
-                    color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05)
-                    border.width: 1
-                    border.color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.15)
-
-                    Column {
-                        id: sec3Col
-                        anchors.fill: parent
-                        anchors.margins: Style.space(8)
-                        spacing: Style.space(4)
-
-                        Text {
-                            text: "3. Conflict Resolution on Restore"
-                            color: Theme.Color.accent
-                            font.family: Style.font.family
-                            font.pixelSize: Theme.Style.font.bodySmall
-                            font.bold: true
-                        }
-                        Text {
-                            width: parent.width
-                            text: "If open windows already occupy a workspace when restoring an App Preset:\n• Move: Shifts them to the next free workspace (with notification).\n• Close: Closes the conflicting windows.\n• Keep: Floats them so they stay without breaking the tiled preset.\n• Tip: Turn on 'Auto-move on restore' in settings to auto-move without prompting."
-                            color: Color.foreground
-                            opacity: 0.85
-                            font.family: Style.font.family
-                            font.pixelSize: Style.font.caption
-                            wrapMode: Text.Wrap
-                        }
-                    }
-                }
-
-                // Section 4: Right-Click Hints & Shortcuts
-                Rectangle {
-                    width: parent.width
-                    implicitHeight: sec4Col.implicitHeight + Style.space(16)
-                    radius: Style.space(6)
-                    color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05)
-                    border.width: 1
-                    border.color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.15)
-
-                    Column {
-                        id: sec4Col
-                        anchors.fill: parent
-                        anchors.margins: Style.space(8)
-                        spacing: Style.space(4)
-
-                        Text {
-                            text: "4. Right-Click Hints & Shortcuts"
-                            color: Theme.Color.accent
-                            font.family: Style.font.family
-                            font.pixelSize: Theme.Style.font.bodySmall
-                            font.bold: true
-                        }
-                        Text {
-                            width: parent.width
-                            text: "• Right-click any button or control to display instant help and handling tips.\n• Right-click the bar icon to pause or resume Workspace Presets.\n• Left-click the bar icon to toggle this settings panel.\n• Right-click hints can be toggled on/off in the settings below."
-                            color: Color.foreground
-                            opacity: 0.85
-                            font.family: Style.font.family
-                            font.pixelSize: Style.font.caption
-                            wrapMode: Text.Wrap
-                        }
-                    }
-                }
-
-                Ui.Button {
-                    width: parent.width
-                    text: "← Back to Workspace Controls"
-                    bordered: true
-                    focusable: true
-                    onClicked: root.showManualView = false
-                }
-            }
         }
         }
     }

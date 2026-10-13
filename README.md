@@ -29,6 +29,12 @@
 See the [user manual](MANUAL.md) for controls and workflows, and the
 [0.2.8 release notes](CHANGELOG.md) for what changed.
 
+## Languages and settings
+
+The interface is built in in eight languages: English, German (Deutsch), French (Français), Spanish (Español), Italian (Italiano), Portuguese (Português), Dutch (Nederlands) and Polish (Polski). It follows the system language (`LC_ALL`, `LC_MESSAGES`, `LANG`) and falls back to English. To pick another one, open the **gear (⚙)** at the top right of the panel → **Language**. The translations ship with the plugin: nothing is downloaded or generated, and the plugin makes no extra requests for them. The choice is stored on the widget's bar entry in `~/.config/omarchy/shell.json` (`"language"`); **System (…)** removes it again.
+
+The settings page opens from the gear and closes with **← Back**, Backspace or Esc. It also holds the **right-click help hints** and the **auto-move** switches. The long built-in user manual was removed from the popup; the [user manual](MANUAL.md) stays in the repository.
+
 ## Install
 
 Requires **Omarchy with the Quickshell plugin system**, Python 3.10+, and
@@ -133,4 +139,4 @@ See [the prototype review](docs/REVIEW.md) for the bugs addressed and
 
 MIT © 2026 Uwe Bruckhaus
 
-The plugin popup uses fixed original Omarchy styling, independent of desktop themes. Click **User Manual** for integrated guidance.
+The plugin popup uses fixed original Omarchy styling, independent of desktop themes. Right-click a control for a short help hint (switch hints off in the settings page).
