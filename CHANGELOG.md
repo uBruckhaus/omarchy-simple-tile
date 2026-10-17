@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.3.1 — 2026-10-17
+
+- Works with Qt 6.12: the shell palette is referenced as `Commons.Color`, because Qt 6.12 adds its own `Color` type that hid it and left panels and buttons without colours. Also works on Qt 6.11.
+
 ## 0.3.0 — 2026-10-13
 
 - Eight built-in interface languages (English, German, French, Spanish, Italian, Portuguese, Dutch, Polish); the system language is used unless another one is picked.

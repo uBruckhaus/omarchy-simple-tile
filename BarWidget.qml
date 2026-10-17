@@ -4,6 +4,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Hyprland
 import "native/Commons"
+import "native/Commons" as Commons
 import qs.Commons as Theme
 import "native/Ui" as Ui
 import qs.Ui as ShellUi
@@ -1009,7 +1010,7 @@ ShellUi.BarWidget {
             readonly property string currentPreset: root.autoPresetForWorkspace(root.currentWsId) || root.defaultAutoPresetFor(root.effectiveCapFor(root.currentWsId))
             readonly property bool isManual: root.isWorkspaceManual(root.currentWsId)
             readonly property bool isNative: root.isWorkspaceNative(root.currentWsId)
-            readonly property color tileColor: root.failed ? Color.urgent : (button.active ? Color.accent : (button.foreground || Color.foreground))
+            readonly property color tileColor: root.failed ? Commons.Color.urgent : (button.active ? Commons.Color.accent : (button.foreground || Commons.Color.foreground))
             readonly property int mode: root.currentBarIconMode
 
             Item {
@@ -1176,8 +1177,8 @@ ShellUi.BarWidget {
                     visible: mode === 1
                     anchors.centerIn: parent
                     width: 5; height: 6
-                    Rectangle { x: 0; y: 0; width: 1.5; height: 6; radius: 0.5; color: Color.urgent }
-                    Rectangle { x: 3.5; y: 0; width: 1.5; height: 6; radius: 0.5; color: Color.urgent }
+                    Rectangle { x: 0; y: 0; width: 1.5; height: 6; radius: 0.5; color: Commons.Color.urgent }
+                    Rectangle { x: 3.5; y: 0; width: 1.5; height: 6; radius: 0.5; color: Commons.Color.urgent }
                 }
 
                 // ==========================================
@@ -1194,9 +1195,9 @@ ShellUi.BarWidget {
                         width: 5.5
                         height: 5.5
                         radius: 2.75
-                        color: Color.accent
+                        color: Commons.Color.accent
                         border.width: 1
-                        border.color: Color.background
+                        border.color: Commons.Color.background
 
                         // Subtle outer halo when on the active app preset workspace
                         Rectangle {
@@ -1207,7 +1208,7 @@ ShellUi.BarWidget {
                             radius: width / 2
                             color: "transparent"
                             border.width: 1
-                            border.color: Color.accent
+                            border.color: Commons.Color.accent
                             opacity: 0.60
                         }
                     }
@@ -1217,7 +1218,7 @@ ShellUi.BarWidget {
                 Rectangle {
                     visible: root.failed
                     x: 9; y: -1; width: 6; height: 6; radius: 3
-                    color: Color.urgent
+                    color: Commons.Color.urgent
                     Text {
                         anchors.centerIn: parent
                         text: "!"
@@ -1319,7 +1320,7 @@ ShellUi.BarWidget {
             Text {
                 width: parent.width
                 text: root.t("aLittleRoomTo")
-                color: Color.foreground
+                color: Commons.Color.foreground
                 opacity: 0.65
                 font.family: Style.font.family
                 font.pixelSize: Style.font.body
@@ -1346,9 +1347,9 @@ ShellUi.BarWidget {
                 width: parent.width
                 implicitHeight: hintCol.implicitHeight + Style.space(16)
                 radius: Style.space(6)
-                color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.12)
+                color: Qt.rgba(Commons.Color.accent.r, Commons.Color.accent.g, Commons.Color.accent.b, 0.12)
                 border.width: 1
-                border.color: Color.accent
+                border.color: Commons.Color.accent
 
                 Column {
                     id: hintCol
@@ -1371,7 +1372,7 @@ ShellUi.BarWidget {
                                 }
                                 Text {
                                     text: root.activeHintTitle
-                                    color: Color.accent
+                                    color: Commons.Color.accent
                                     font.family: Style.font.family
                                     font.pixelSize: Style.font.bodySmall
                                     font.bold: true
@@ -1394,7 +1395,7 @@ ShellUi.BarWidget {
                     Text {
                         width: parent.width
                         text: root.activeHintBody
-                        color: Color.foreground
+                        color: Commons.Color.foreground
                         opacity: 0.9
                         font.family: Style.font.family
                         font.pixelSize: Style.font.caption
@@ -1405,7 +1406,7 @@ ShellUi.BarWidget {
                         visible: root.activeHintTip !== ""
                         width: parent.width
                         text: root.activeHintTip
-                        color: Color.accent
+                        color: Commons.Color.accent
                         opacity: 0.95
                         font.family: Style.font.family
                         font.pixelSize: Style.font.caption
@@ -1433,13 +1434,13 @@ ShellUi.BarWidget {
                         anchors.verticalCenter: parent.verticalCenter
                         onClicked: { root.showSettingsView = false; content.forceActiveFocus() }
                     }
-                    Text { textFormat: Text.PlainText; text: root.t("settings").toUpperCase(); color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 1; anchors.verticalCenter: parent.verticalCenter }
+                    Text { textFormat: Text.PlainText; text: root.t("settings").toUpperCase(); color: Commons.Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 1; anchors.verticalCenter: parent.verticalCenter }
                 }
                 Ui.PanelSeparator { width: parent.width }
 
                 Row {
                     spacing: Style.space(10)
-                    Text { id: languageLabel; textFormat: Text.PlainText; width: Style.space(90); text: root.t("language"); color: Color.foreground; opacity: 0.8; font.family: Style.font.family; font.pixelSize: Style.font.caption; anchors.verticalCenter: parent.verticalCenter }
+                    Text { id: languageLabel; textFormat: Text.PlainText; width: Style.space(90); text: root.t("language"); color: Commons.Color.foreground; opacity: 0.8; font.family: Style.font.family; font.pixelSize: Style.font.caption; anchors.verticalCenter: parent.verticalCenter }
                     CompactDropdown {
                         id: languagePicker
                         anchors.verticalCenter: parent.verticalCenter
@@ -1505,7 +1506,7 @@ ShellUi.BarWidget {
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
                         text: root.t("workspaces")
-                        color: Color.foreground
+                        color: Commons.Color.foreground
                         opacity: 0.65
                         font.family: Style.font.family
                         font.pixelSize: Style.font.caption
@@ -1565,7 +1566,7 @@ ShellUi.BarWidget {
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
                         text: root.t("allWorkspaces")
-                        color: Color.foreground
+                        color: Commons.Color.foreground
                         font.family: Style.font.family
                         font.pixelSize: Style.font.bodySmall
                         font.bold: allCard.selected
@@ -1576,7 +1577,7 @@ ShellUi.BarWidget {
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
                         text: root.t("defaultWindows", [root.cap])
-                        color: allCard.selected ? Color.accent : Color.foreground
+                        color: allCard.selected ? Commons.Color.accent : Commons.Color.foreground
                         font.family: Style.font.family
                         font.pixelSize: Style.font.caption
                         opacity: allCard.selected ? 1.0 : 0.65
@@ -1639,7 +1640,7 @@ ShellUi.BarWidget {
 
                                     Text {
                                         text: wsCard.modelData
-                                        color: Color.foreground
+                                        color: Commons.Color.foreground
                                         font.family: Style.font.family
                                         font.pixelSize: Style.font.bodySmall
                                         font.bold: true
@@ -1650,7 +1651,7 @@ ShellUi.BarWidget {
                                         width: Style.space(5)
                                         height: Style.space(5)
                                         radius: width / 2
-                                        color: Color.accent
+                                        color: Commons.Color.accent
                                         visible: wsCard.modelData === root.currentWsId
                                         anchors.verticalCenter: parent.verticalCenter
                                     }
@@ -1660,7 +1661,7 @@ ShellUi.BarWidget {
                                     anchors.right: parent.right
                                     anchors.verticalCenter: parent.verticalCenter
                                     text: wsCard.isManual ? root.t("appPreset") : (root.isWorkspaceNative(wsCard.modelData) ? root.t("noLimit") : root.t("maxN", [root.capForWorkspace(wsCard.modelData)]))
-                                    color: (wsCard.isManual || root.hasCustomCap(wsCard.modelData)) ? Color.accent : Color.foreground
+                                    color: (wsCard.isManual || root.hasCustomCap(wsCard.modelData)) ? Commons.Color.accent : Commons.Color.foreground
                                     font.family: Style.font.family
                                     font.pixelSize: wsCard.isManual ? Math.max(9, Style.font.caption - 2) : Style.font.caption
                                     font.bold: wsCard.isManual || root.hasCustomCap(wsCard.modelData)
@@ -1675,7 +1676,7 @@ ShellUi.BarWidget {
                                 anchors.left: parent.left
                                 anchors.right: parent.right
                                 height: 1
-                                color: Color.foreground
+                                color: Commons.Color.foreground
                                 opacity: 0.12
                             }
 
@@ -1721,9 +1722,9 @@ ShellUi.BarWidget {
                                                 width: Math.max(6, Math.round(normW * parent.width) - 2)
                                                 height: Math.max(6, Math.round(normH * parent.height) - 2)
                                                 radius: 2
-                                                color: Color.accentContainer || "#262b3d"
+                                                color: Commons.Color.accentContainer || "#262b3d"
                                                 border.width: 1
-                                                border.color: Color.accent
+                                                border.color: Commons.Color.accent
                                                 opacity: 0.9
 
                                                 Rectangle {
@@ -1731,7 +1732,7 @@ ShellUi.BarWidget {
                                                     anchors.left: parent.left
                                                     anchors.right: parent.right
                                                     height: 2
-                                                    color: Color.accent
+                                                    color: Commons.Color.accent
                                                 }
 
                                                 Image {
@@ -1753,7 +1754,7 @@ ShellUi.BarWidget {
                                         anchors.centerIn: parent
                                         visible: wsCard.isManual && wsCard.savedWindows.length === 0
                                         text: root.t("noAppPreset")
-                                        color: Color.foreground
+                                        color: Commons.Color.foreground
                                         opacity: 0.4
                                         font.family: Style.font.family
                                         font.pixelSize: Style.font.caption
@@ -1773,11 +1774,11 @@ ShellUi.BarWidget {
                                             anchors.fill: parent
                                             visible: parent.capVal === 1 && parent.preset !== "none"
                                             radius: 2
-                                            color: Color.accentContainer || "#262b3d"
+                                            color: Commons.Color.accentContainer || "#262b3d"
                                             border.width: 1
-                                            border.color: Color.accent
+                                            border.color: Commons.Color.accent
                                             opacity: 0.85
-                                            Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Color.accent }
+                                            Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Commons.Color.accent }
                                         }
 
                                         // Preset: 2 windows - Side-by-Side
@@ -1789,21 +1790,21 @@ ShellUi.BarWidget {
                                                 width: (parent.width - 2) / 2
                                                 height: parent.height
                                                 radius: 2
-                                                color: Color.accentContainer || "#262b3d"
+                                                color: Commons.Color.accentContainer || "#262b3d"
                                                 border.width: 1
-                                                border.color: Color.accent
+                                                border.color: Commons.Color.accent
                                                 opacity: 0.85
-                                                Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Color.accent }
+                                                Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Commons.Color.accent }
                                             }
                                             Rectangle {
                                                 width: (parent.width - 2) / 2
                                                 height: parent.height
                                                 radius: 2
-                                                color: Color.accentContainer || "#262b3d"
+                                                color: Commons.Color.accentContainer || "#262b3d"
                                                 border.width: 1
-                                                border.color: Color.accent
+                                                border.color: Commons.Color.accent
                                                 opacity: 0.85
-                                                Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Color.accent }
+                                                Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Commons.Color.accent }
                                             }
                                         }
 
@@ -1816,21 +1817,21 @@ ShellUi.BarWidget {
                                                 width: parent.width
                                                 height: (parent.height - 2) / 2
                                                 radius: 2
-                                                color: Color.accentContainer || "#262b3d"
+                                                color: Commons.Color.accentContainer || "#262b3d"
                                                 border.width: 1
-                                                border.color: Color.accent
+                                                border.color: Commons.Color.accent
                                                 opacity: 0.85
-                                                Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Color.accent }
+                                                Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Commons.Color.accent }
                                             }
                                             Rectangle {
                                                 width: parent.width
                                                 height: (parent.height - 2) / 2
                                                 radius: 2
-                                                color: Color.accentContainer || "#262b3d"
+                                                color: Commons.Color.accentContainer || "#262b3d"
                                                 border.width: 1
-                                                border.color: Color.accent
+                                                border.color: Commons.Color.accent
                                                 opacity: 0.85
-                                                Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Color.accent }
+                                                Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Commons.Color.accent }
                                             }
                                         }
 
@@ -1845,11 +1846,11 @@ ShellUi.BarWidget {
                                                     width: (parent.width - 4) / 3
                                                     height: parent.height
                                                     radius: 2
-                                                    color: Color.accentContainer || "#262b3d"
+                                                    color: Commons.Color.accentContainer || "#262b3d"
                                                     border.width: 1
-                                                    border.color: Color.accent
+                                                    border.color: Commons.Color.accent
                                                     opacity: 0.85
-                                                    Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Color.accent }
+                                                    Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Commons.Color.accent }
                                                 }
                                             }
                                         }
@@ -1863,11 +1864,11 @@ ShellUi.BarWidget {
                                                 width: (parent.width - 2) / 2
                                                 height: parent.height
                                                 radius: 2
-                                                color: Color.accentContainer || "#262b3d"
+                                                color: Commons.Color.accentContainer || "#262b3d"
                                                 border.width: 1
-                                                border.color: Color.accent
+                                                border.color: Commons.Color.accent
                                                 opacity: 0.85
-                                                Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Color.accent }
+                                                Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Commons.Color.accent }
                                             }
                                             Column {
                                                 width: (parent.width - 2) / 2
@@ -1877,21 +1878,21 @@ ShellUi.BarWidget {
                                                     width: parent.width
                                                     height: (parent.height - 2) / 2
                                                     radius: 2
-                                                    color: Color.accentContainer || "#262b3d"
+                                                    color: Commons.Color.accentContainer || "#262b3d"
                                                     border.width: 1
-                                                    border.color: Color.accent
+                                                    border.color: Commons.Color.accent
                                                     opacity: 0.85
-                                                    Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Color.accent }
+                                                    Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Commons.Color.accent }
                                                 }
                                                 Rectangle {
                                                     width: parent.width
                                                     height: (parent.height - 2) / 2
                                                     radius: 2
-                                                    color: Color.accentContainer || "#262b3d"
+                                                    color: Commons.Color.accentContainer || "#262b3d"
                                                     border.width: 1
-                                                    border.color: Color.accent
+                                                    border.color: Commons.Color.accent
                                                     opacity: 0.85
-                                                    Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Color.accent }
+                                                    Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Commons.Color.accent }
                                                 }
                                             }
                                         }
@@ -1909,32 +1910,32 @@ ShellUi.BarWidget {
                                                     width: parent.width
                                                     height: (parent.height - 2) / 2
                                                     radius: 2
-                                                    color: Color.accentContainer || "#262b3d"
+                                                    color: Commons.Color.accentContainer || "#262b3d"
                                                     border.width: 1
-                                                    border.color: Color.accent
+                                                    border.color: Commons.Color.accent
                                                     opacity: 0.85
-                                                    Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Color.accent }
+                                                    Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Commons.Color.accent }
                                                 }
                                                 Rectangle {
                                                     width: parent.width
                                                     height: (parent.height - 2) / 2
                                                     radius: 2
-                                                    color: Color.accentContainer || "#262b3d"
+                                                    color: Commons.Color.accentContainer || "#262b3d"
                                                     border.width: 1
-                                                    border.color: Color.accent
+                                                    border.color: Commons.Color.accent
                                                     opacity: 0.85
-                                                    Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Color.accent }
+                                                    Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Commons.Color.accent }
                                                 }
                                             }
                                             Rectangle {
                                                 width: (parent.width - 2) / 2
                                                 height: parent.height
                                                 radius: 2
-                                                color: Color.accentContainer || "#262b3d"
+                                                color: Commons.Color.accentContainer || "#262b3d"
                                                 border.width: 1
-                                                border.color: Color.accent
+                                                border.color: Commons.Color.accent
                                                 opacity: 0.85
-                                                Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Color.accent }
+                                                Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Commons.Color.accent }
                                             }
                                         }
 
@@ -1949,11 +1950,11 @@ ShellUi.BarWidget {
                                                     width: (parent.width - 6) / 4
                                                     height: parent.height
                                                     radius: 2
-                                                    color: Color.accentContainer || "#262b3d"
+                                                    color: Commons.Color.accentContainer || "#262b3d"
                                                     border.width: 1
-                                                    border.color: Color.accent
+                                                    border.color: Commons.Color.accent
                                                     opacity: 0.85
-                                                    Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Color.accent }
+                                                    Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Commons.Color.accent }
                                                 }
                                             }
                                         }
@@ -1970,11 +1971,11 @@ ShellUi.BarWidget {
                                                     width: (parent.width - 2) / 2
                                                     height: (parent.height - 2) / 2
                                                     radius: 2
-                                                    color: Color.accentContainer || "#262b3d"
+                                                    color: Commons.Color.accentContainer || "#262b3d"
                                                     border.width: 1
-                                                    border.color: Color.accent
+                                                    border.color: Commons.Color.accent
                                                     opacity: 0.85
-                                                    Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Color.accent }
+                                                    Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Commons.Color.accent }
                                                 }
                                             }
                                         }
@@ -1991,7 +1992,7 @@ ShellUi.BarWidget {
                                             Text {
                                                 anchors.centerIn: parent
                                                 text: root.t("native")
-                                                color: Color.foreground
+                                                color: Commons.Color.foreground
                                                 font.family: Style.font.family
                                                 font.pixelSize: Style.font.caption
                                                 opacity: 0.6
@@ -2018,7 +2019,7 @@ ShellUi.BarWidget {
 
                     Text {
                         text: root.t("workspaceN", [root.selectedWorkspace]).toUpperCase() + (root.selectedWorkspace === root.currentWsId ? root.t("active2") : "")
-                        color: Color.foreground
+                        color: Commons.Color.foreground
                         opacity: 0.65
                         font.family: Style.font.family
                         font.pixelSize: Style.font.caption
@@ -2089,7 +2090,7 @@ ShellUi.BarWidget {
 
                         Text {
                             text: root.t("layoutPreset")
-                            color: Color.foreground
+                            color: Commons.Color.foreground
                             opacity: 0.65
                             font.family: Style.font.family
                             font.pixelSize: Style.font.caption
@@ -2132,9 +2133,9 @@ ShellUi.BarWidget {
                             width: parent.width
                             implicitHeight: appPresetBannerRow.implicitHeight + Style.space(8)
                             radius: Style.space(4)
-                            color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.12)
+                            color: Qt.rgba(Commons.Color.accent.r, Commons.Color.accent.g, Commons.Color.accent.b, 0.12)
                             border.width: 1
-                            border.color: Color.accent
+                            border.color: Commons.Color.accent
 
                             Row {
                                 id: appPresetBannerRow
@@ -2146,7 +2147,7 @@ ShellUi.BarWidget {
                                     anchors.verticalCenter: parent.verticalCenter
                                     width: parent.width - removeAppPresetBtn.width - Style.space(6)
                                     text: root.t("appPresetSaved", [root.savedAppsFor(root.selectedWorkspace).length])
-                                    color: Color.foreground
+                                    color: Commons.Color.foreground
                                     font.family: Style.font.family
                                     font.pixelSize: Style.font.caption
                                     font.bold: true
@@ -2304,9 +2305,9 @@ ShellUi.BarWidget {
                             width: parent.width
                             implicitHeight: snapshotCol.implicitHeight + Style.space(16)
                             radius: Style.space(6)
-                            color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05)
+                            color: Qt.rgba(Commons.Color.foreground.r, Commons.Color.foreground.g, Commons.Color.foreground.b, 0.05)
                             border.width: 1
-                            border.color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.15)
+                            border.color: Qt.rgba(Commons.Color.foreground.r, Commons.Color.foreground.g, Commons.Color.foreground.b, 0.15)
 
                             Column {
                                 id: snapshotCol
@@ -2318,7 +2319,7 @@ ShellUi.BarWidget {
                                     text: root.hasSavedLayout(root.selectedWorkspace)
                                         ? root.t("appPresetSummary", [root.savedLayoutSummary(root.selectedWorkspace)])
                                         : root.t("noAppPresetSaved")
-                                    color: Color.foreground
+                                    color: Commons.Color.foreground
                                     font.family: Style.font.family
                                     font.pixelSize: Style.font.bodySmall
                                     font.bold: true
@@ -2328,7 +2329,7 @@ ShellUi.BarWidget {
                                     width: parent.width
                                     text: root.t("removesAnAppFrom")
                                     wrapMode: Text.Wrap
-                                    color: Color.foreground
+                                    color: Commons.Color.foreground
                                     opacity: 0.65
                                     font.family: Style.font.family
                                     font.pixelSize: Style.font.caption
@@ -2354,12 +2355,12 @@ ShellUi.BarWidget {
                                             radius: Style.space(4)
                                             readonly property bool isMissing: root.isAppFailed(root.selectedWorkspace, modelData)
                                             color: isMissing
-                                                ? Qt.rgba(Color.urgent.r, Color.urgent.g, Color.urgent.b, 0.15)
-                                                : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.08)
+                                                ? Qt.rgba(Commons.Color.urgent.r, Commons.Color.urgent.g, Commons.Color.urgent.b, 0.15)
+                                                : Qt.rgba(Commons.Color.foreground.r, Commons.Color.foreground.g, Commons.Color.foreground.b, 0.08)
                                             border.width: 1
                                             border.color: isMissing
-                                                ? Color.urgent
-                                                : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.2)
+                                                ? Commons.Color.urgent
+                                                : Qt.rgba(Commons.Color.foreground.r, Commons.Color.foreground.g, Commons.Color.foreground.b, 0.2)
 
                                             Row {
                                                 id: chipRow
@@ -2392,7 +2393,7 @@ ShellUi.BarWidget {
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     textFormat: Text.PlainText
                                                     text: chipRect.modelData.name || chipRect.modelData.class || root.t("app")
-                                                    color: chipRect.isMissing ? Color.urgent : Color.foreground
+                                                    color: chipRect.isMissing ? Commons.Color.urgent : Commons.Color.foreground
                                                     font.family: Style.font.family
                                                     font.pixelSize: Style.font.caption
                                                 }
@@ -2403,12 +2404,12 @@ ShellUi.BarWidget {
                                                     width: Style.space(20)
                                                     height: Style.space(20)
                                                     radius: width / 2
-                                                    color: chipMouse.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.25) : "transparent"
+                                                    color: chipMouse.containsMouse ? Qt.rgba(Commons.Color.foreground.r, Commons.Color.foreground.g, Commons.Color.foreground.b, 0.25) : "transparent"
 
                                                     Text {
                                                         anchors.centerIn: parent
                                                         text: "✕"
-                                                        color: Color.foreground
+                                                        color: Commons.Color.foreground
                                                         opacity: chipMouse.containsMouse ? 1.0 : 0.6
                                                         font.pixelSize: Style.font.caption
                                                     }
@@ -2437,7 +2438,7 @@ ShellUi.BarWidget {
                                     wrapMode: Text.Wrap
                                     textFormat: Text.PlainText
                                     text: root.t("lastRestoreFailed", [failureText])
-                                    color: Color.urgent
+                                    color: Commons.Color.urgent
                                     font.family: Style.font.family
                                     font.pixelSize: Style.font.caption
                                 }
@@ -2447,7 +2448,7 @@ ShellUi.BarWidget {
                                     width: parent.width
                                     wrapMode: Text.Wrap
                                     text: root.t("openArrange", [root.selectedWorkspace])
-                                    color: Color.foreground
+                                    color: Commons.Color.foreground
                                     opacity: 0.65
                                     font.family: Style.font.family
                                     font.pixelSize: Style.font.caption
@@ -2461,9 +2462,9 @@ ShellUi.BarWidget {
                             width: parent.width
                             implicitHeight: conflictCol.implicitHeight + Style.space(16)
                             radius: Style.space(6)
-                            color: Qt.rgba(Color.urgent.r, Color.urgent.g, Color.urgent.b, 0.1)
+                            color: Qt.rgba(Commons.Color.urgent.r, Commons.Color.urgent.g, Commons.Color.urgent.b, 0.1)
                             border.width: 1
-                            border.color: Color.urgent
+                            border.color: Commons.Color.urgent
 
                             Column {
                                 id: conflictCol
@@ -2481,7 +2482,7 @@ ShellUi.BarWidget {
                                     }
                                     Text {
                                         text: root.t("existingWindows", [root.restoreConflict ? root.restoreConflict.workspace : ""])
-                                        color: Color.urgent
+                                        color: Commons.Color.urgent
                                         font.family: Style.font.family
                                         font.pixelSize: Style.font.bodySmall
                                         font.bold: true
@@ -2492,7 +2493,7 @@ ShellUi.BarWidget {
                                 Text {
                                     width: parent.width
                                     text: root.t("wsHasConflicts", [root.restoreConflict ? root.restoreConflict.conflict_count : 0])
-                                    color: Color.foreground
+                                    color: Commons.Color.foreground
                                     opacity: 0.85
                                     font.family: Style.font.family
                                     font.pixelSize: Style.font.caption
@@ -2510,9 +2511,9 @@ ShellUi.BarWidget {
                                             height: Style.space(20)
                                             width: Math.min(conflictCol.width, conflictTxt.implicitWidth + Style.space(12))
                                             radius: Style.space(3)
-                                            color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.1)
+                                            color: Qt.rgba(Commons.Color.foreground.r, Commons.Color.foreground.g, Commons.Color.foreground.b, 0.1)
                                             border.width: 1
-                                            border.color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.2)
+                                            border.color: Qt.rgba(Commons.Color.foreground.r, Commons.Color.foreground.g, Commons.Color.foreground.b, 0.2)
                                             Text {
                                                 id: conflictTxt
                                                 anchors.centerIn: parent
@@ -2520,7 +2521,7 @@ ShellUi.BarWidget {
                                                 textFormat: Text.PlainText
                                                 text: modelData.title ? (modelData.class + " (" + modelData.title + ")") : (modelData.class || root.t("window2"))
                                                 elide: Text.ElideMiddle
-                                                color: Color.foreground
+                                                color: Commons.Color.foreground
                                                 font.family: Style.font.family
                                                 font.pixelSize: Style.font.caption - 1
                                             }
@@ -2531,7 +2532,7 @@ ShellUi.BarWidget {
                                 Text {
                                     width: parent.width
                                     text: root.t("howWouldYouLike")
-                                    color: Color.foreground
+                                    color: Commons.Color.foreground
                                     opacity: 0.85
                                     font.family: Style.font.family
                                     font.pixelSize: Style.font.caption
@@ -2680,7 +2681,7 @@ ShellUi.BarWidget {
 
                 Text {
                     text: root.t("defaultWindowLimitAll")
-                    color: Color.foreground
+                    color: Commons.Color.foreground
                     opacity: 0.65
                     font.family: Style.font.family
                     font.pixelSize: Style.font.caption
@@ -2710,7 +2711,7 @@ ShellUi.BarWidget {
                 Text {
                     visible: root.cap > 1
                     text: root.t("defaultLayoutPreset")
-                    color: Color.foreground
+                    color: Commons.Color.foreground
                     opacity: 0.65
                     font.family: Style.font.family
                     font.pixelSize: Style.font.caption
@@ -2832,13 +2833,13 @@ ShellUi.BarWidget {
                 Rectangle {
                     width: parent.width
                     height: 1
-                    color: Color.foreground
+                    color: Commons.Color.foreground
                     opacity: 0.12
                 }
 
                 Text {
                     text: root.t("presetAppPresetManagement")
-                    color: Color.foreground
+                    color: Commons.Color.foreground
                     opacity: 0.65
                     font.family: Style.font.family
                     font.pixelSize: Style.font.caption
@@ -2899,7 +2900,7 @@ ShellUi.BarWidget {
                 textFormat: Text.PlainText
                 text: root.failed ? root.lastMessage : (root.tilingActive ? root.lastMessage : root.t("yourWindowsStayWhere"))
                 wrapMode: Text.Wrap
-                color: root.failed ? Color.urgent : Color.foreground
+                color: root.failed ? Commons.Color.urgent : Commons.Color.foreground
                 opacity: root.failed ? 1 : 0.6
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
