@@ -54,7 +54,8 @@ def workspace_limit(ws_id, cap, workspace_caps=None, workspace_auto_presets=None
     limit = (workspace_caps or {}).get(ws_id, cap)
     preset = ((workspace_auto_presets or {}).get(ws_id)
               or (default_auto_presets or {}).get(str(limit)))
-    return None if preset == "none" else limit
+    # Native tiling and floating workspaces take any number of windows.
+    return None if preset in ("none", "floating") else limit
 
 
 def pick_target_ws(workspaces, counts, current_ws_id, max_windows, workspace_caps=None,
@@ -1146,11 +1147,61 @@ def _autostart_all(dry_run):
     return {"status": "partial" if failures else "ok", "workspaces": started, "failed_count": failures}
 
 
+FLOAT_TAG = "workspace-presets-floating"   # Windows this plugin floated (tiled again later).
+FLOAT_WIDTH, FLOAT_HEIGHT = 0.6, 0.7       # A floated window's size, as part of the usable screen.
+FLOAT_CASCADE = 32                         # Each further floated window: this much right and down.
+
+
+def floating_geometry(monitor, index):
+    """Size and position (layout pixels) for the index-th floated window on
+    monitor (hyprctl monitors -j): centred, later ones cascading."""
+    scale = monitor.get("scale") or 1
+    left, top, right, bottom = (list(monitor.get("reserved") or []) + [0, 0, 0, 0])[:4]
+    width = monitor["width"] / scale - left - right
+    height = monitor["height"] / scale - top - bottom
+    w, h = round(width * FLOAT_WIDTH), round(height * FLOAT_HEIGHT)
+    step = FLOAT_CASCADE * (index % 6)
+    x = monitor.get("x", 0) + left + round((width - w) / 2) - FLOAT_CASCADE * 2 + step
+    y = monitor.get("y", 0) + top + round((height - h) / 2) - FLOAT_CASCADE * 2 + step
+    return w, h, x, y
+
+
+def floating_actions(ws_id, clients, monitors):
+    """Float every tiled window on ws_id, tag it, and give it a desktop-like
+    size and place. Already floating windows stay where they are."""
+    actions = []
+    already = sum(1 for c in clients if c.get("workspace", {}).get("id") == ws_id and c.get("floating"))
+    by_id = {m.get("id"): m for m in monitors if isinstance(m, dict) and "width" in m and "height" in m}
+    for index, c in enumerate(c for c in clients if c.get("workspace", {}).get("id") == ws_id and is_tiled(c)):
+        addr = normalize_addr(c["address"])
+        target = 'window="address:%s"' % addr
+        actions.append(("eval", 'hl.dispatch(hl.dsp.window.float({%s, action="on"}))' % target))
+        actions.append(("eval", 'hl.dispatch(hl.dsp.window.tag({%s, tag="+%s"}))' % (target, FLOAT_TAG)))
+        monitor = by_id.get(c.get("monitor"))
+        if monitor:
+            w, h, x, y = floating_geometry(monitor, already + index)
+            actions.append(("eval", 'hl.dispatch(hl.dsp.window.resize({%s, x=%d, y=%d, relative=false}))' % (target, w, h)))
+            actions.append(("eval", 'hl.dispatch(hl.dsp.window.move({%s, x=%d, y=%d, relative=false}))' % (target, x, y)))
+    return actions
+
+
+def unfloat_actions(ws_id, clients):
+    """Leaving the floating preset: tile again only the windows it floated."""
+    actions = []
+    for c in clients:
+        if (c.get("workspace", {}).get("id") == ws_id and c.get("floating")
+                and FLOAT_TAG in (c.get("tags") or [])):
+            target = 'window="address:%s"' % normalize_addr(c["address"])
+            actions.append(("eval", 'hl.dispatch(hl.dsp.window.float({%s, action="off"}))' % target))
+            actions.append(("eval", 'hl.dispatch(hl.dsp.window.tag({%s, tag="-%s"}))' % (target, FLOAT_TAG)))
+    return actions
+
+
 def apply_layout_preset(ws_id, preset, dry_run=False):
     if type(ws_id) is not int or ws_id <= 0:
         raise ValueError("invalid workspace id")
     preset = str(preset).lower()
-    all_valid = {"side-by-side", "stacked", "master-left", "master-right", "columns", "grid", "none"}
+    all_valid = {"side-by-side", "stacked", "master-left", "master-right", "columns", "grid", "none", "floating"}
     if preset not in all_valid:
         raise ValueError(f"invalid preset: {preset}")
 
@@ -1158,6 +1209,27 @@ def apply_layout_preset(ws_id, preset, dry_run=False):
     ws_clients = [c for c in clients if c.get("workspace", {}).get("id") == ws_id and is_tiled(c)]
 
     actions = []
+
+    if preset == "floating":
+        try:
+            monitors = json.loads(hypr("monitors", "-j"))
+        except Exception:
+            monitors = []
+        actions = floating_actions(ws_id, clients, monitors if isinstance(monitors, list) else [])
+        if not dry_run:
+            for cmd, code in actions:
+                try:
+                    hypr(cmd, code)
+                except Exception:
+                    pass
+        return {"status": "ok", "workspace": ws_id, "preset": preset, "actions": len(actions)}
+    actions += unfloat_actions(ws_id, clients)
+    if actions:
+        # The windows just tiled again take part in the layout below.
+        floated = {c.get("address") for c in clients if FLOAT_TAG in (c.get("tags") or [])}
+        ws_clients += [dict(c, floating=False) for c in clients
+                       if c.get("address") in floated and c.get("workspace", {}).get("id") == ws_id
+                       and c.get("mapped", False) and not c.get("fullscreen", 0) and not c.get("hidden", False)]
 
     try:
         settings = read_settings()

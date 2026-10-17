@@ -45,6 +45,7 @@ When a workspace is in Presets mode, you can select how your windows arrange the
   - `◨ Master Left`: 1 large master on the left, 3 stacked on the right.
   - `◧ Master Right`: 1 large master on the right, 3 stacked on the left.
   - `|||| Columns`: 4 side-by-side vertical columns across the screen.
+- **❐ Floating** (any limit): every window on the workspace floats, like on a classic desktop. Open windows are floated, centred and cascaded; new windows open floating. No window limit and no automatic overflow. Choosing another preset, a limit or Native tiles the windows Floating floated again (windows that were floating before stay floating).
 - **✕ No Preset (Native)**: Uses Hyprland's native tiling with **no window limit and no automatic overflow**. None of the maximum-window buttons is selected. Choose a numbered limit or geometric preset to resume limited automatic tiling.
 
 ---

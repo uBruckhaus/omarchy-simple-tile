@@ -629,6 +629,50 @@ class AppLaunchTests(unittest.TestCase):
             self.assertFalse(any("togglesplit" in lua for lua in called_lua))
             self.assertFalse(any("orientation" in lua for lua in called_lua))
 
+    def test_floating_workspace_has_no_limit(self):
+        clients = [client(f"0x{i:x}") for i in range(1, 9)]
+        self.assertIsNone(tile.plan_move(clients, WORKSPACES, "0x8", 2,
+                                        workspace_auto_presets={1: "floating"}))
+
+    def test_floating_geometry_is_centred_and_cascades(self):
+        monitor = {"id": 0, "x": 0, "y": 0, "width": 3840, "height": 2160, "scale": 2, "reserved": [0, 30, 0, 0]}
+        w, h, x, y = tile.floating_geometry(monitor, 2)
+        self.assertEqual((w, h), (1152, 735))
+        self.assertEqual((x, y), (384, 30 + 158))
+        first = tile.floating_geometry(monitor, 0)
+        self.assertEqual((x - first[2], y - first[3]), (64, 64))
+
+    def test_apply_floating_floats_and_tags_only_tiled_windows(self):
+        clients = [client("0x1", 2, monitor=0), client("0x2", 2, monitor=0),
+                   dict(client("0x3", 2, monitor=0), floating=True), client("0x4", 1, monitor=0)]
+        monitors = [{"id": 0, "x": 0, "y": 0, "width": 1920, "height": 1080, "scale": 1, "reserved": [0, 0, 0, 0]}]
+        calls = []
+
+        def fake(*args):
+            calls.append(args)
+            return json.dumps(monitors if args[0] == "monitors" else clients)
+        with patch.object(tile, "hypr", side_effect=fake):
+            res = tile.apply_layout_preset(2, "floating")
+        lua = [a[1] for a in calls if a[0] == "eval"]
+        self.assertEqual(res["preset"], "floating")
+        self.assertEqual(sum('action="on"' in code for code in lua), 2)
+        self.assertTrue(all("0x3" not in code and "0x4" not in code for code in lua))
+        self.assertEqual(sum('tag="+%s"' % tile.FLOAT_TAG in code for code in lua), 2)
+        self.assertEqual(sum("window.resize" in code for code in lua), 2)
+        self.assertFalse(any("workspace_rule" in code for code in lua))
+
+    def test_leaving_floating_tiles_only_windows_it_floated(self):
+        clients = [dict(client("0x1", 2), floating=True, tags=[tile.FLOAT_TAG]),
+                   dict(client("0x2", 2), floating=True, tags=[]),
+                   dict(client("0x3", 1), floating=True, tags=[tile.FLOAT_TAG])]
+        with patch.object(tile, "hypr", return_value=json.dumps(clients)) as mock_hypr:
+            tile.apply_layout_preset(2, "none")
+        lua = [c.args[1] for c in mock_hypr.call_args_list if c.args[0] == "eval"]
+        off = [code for code in lua if 'action="off"' in code]
+        self.assertEqual(len(off), 1)
+        self.assertIn("0x1", off[0])
+        self.assertTrue(any('tag="-%s"' % tile.FLOAT_TAG in code for code in lua))
+
     def test_remove_preset_cli_flag(self):
         clients = []
         with patch.object(tile, "hypr", return_value=json.dumps(clients)) as mock_hypr, \

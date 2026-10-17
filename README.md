@@ -6,7 +6,9 @@
 
 - **Presets** give a workspace a window limit (1–4) and a tiling layout:
   side-by-side, stacked, master left or right, columns, or a 2×2 grid. New
-  windows that don't fit move on to the next workspace with room.
+  windows that don't fit move on to the next workspace with room. Or let a
+  workspace float: every window moves and resizes freely, like on a classic
+  desktop.
 - **App Presets** save the apps on a workspace and how they are arranged.
   Restore opens any missing apps and rebuilds the layout, with one click or
   automatically after login.
@@ -16,7 +18,7 @@
 - **Room to focus:** set a limit of 1–4 windows globally or per workspace.
   New overflow windows move forward to a workspace with room; focus follows.
 - **Layouts at a click:** side-by-side, stacked, master-left, master-right,
-  columns, and a 2×2 grid. Native mode removes limits and automatic overflow.
+  columns, a 2×2 grid, and Floating. Native mode removes limits and automatic overflow.
 - **Your apps, your arrangement:** save an App Preset with window geometry
   and app icons, launch missing apps, and rebuild the saved layout.
 - **Restore on your terms:** move conflicting windows, close them, keep them

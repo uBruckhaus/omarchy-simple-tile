@@ -16,7 +16,7 @@ optional session autostart brings your saved workspaces back after login.
 
 - **Window limits:** 1–4 windows, globally or per workspace.
 - **Visual layouts:** side-by-side, stacked, master-left, master-right, columns,
-  and a 2×2 grid; Native mode has no limit or automatic overflow.
+  a 2×2 grid, and Floating; Native mode has no limit or automatic overflow.
 - **Saved app workspaces:** layout snapshots, real app icons, and support for
   multiple saved windows of one app.
 - **Restore choices:** move conflicting windows, close them, keep them floating,
@@ -34,7 +34,7 @@ pixel sizes, and apps that cannot open another window may time out.
 ## Listing metadata
 
 - Plugin ID: `ubruckhaus.simple-tile`
-- Version: `0.3.1`
+- Version: `0.3.2`
 - Author: Uwe Bruckhaus
 - Category: Desktop
 - Tags: workspaces, hyprland, bar

@@ -213,6 +213,10 @@ ShellUi.BarWidget {
         return wsId > 0 && autoPresetForWorkspace(wsId) === "none"
     }
 
+    function isWorkspaceFloating(wsId) {
+        return wsId > 0 && autoPresetForWorkspace(wsId) === "floating"
+    }
+
     function selectedWindowCap(wsId) {
         return isWorkspaceNative(wsId) ? 0 : effectiveCapFor(wsId)
     }
@@ -225,6 +229,7 @@ ShellUi.BarWidget {
         if (preset === "columns") return root.t("columns")
         if (preset === "grid") return root.t("grid")
         if (preset === "none") return root.t("noneNative")
+        if (preset === "floating") return root.t("floating")
         return preset || root.t("default")
     }
 
@@ -235,6 +240,7 @@ ShellUi.BarWidget {
         if (preset === "master-right") return "◧"
         if (preset === "columns") return "|||"
         if (preset === "grid") return "▦"
+        if (preset === "floating") return "❐"
         return ""
     }
 
@@ -505,7 +511,7 @@ ShellUi.BarWidget {
         current[String(wsId)] = newCap
         entry["workspaceCaps"] = current
 
-        var wasNative = isWorkspaceNative(wsId)
+        var wasNative = isWorkspaceNative(wsId) || isWorkspaceFloating(wsId)
         if (wasNative) {
             var presets = Object.assign({}, workspaceAutoPresets)
             presets[String(wsId)] = defaultAutoPresetFor(newCap)
@@ -1148,6 +1154,24 @@ ShellUi.BarWidget {
                         }
                     }
 
+                    // G. Floating (free windows overlapping each other)
+                    Item {
+                        anchors.fill: parent
+                        visible: !isManual && currentPreset === "floating"
+                        Rectangle {
+                            x: 0; y: 0; width: 9; height: 7; radius: 1.5
+                            color: "transparent"
+                            border.width: 1.5
+                            border.color: tileColor
+                            opacity: 0.55
+                        }
+                        Rectangle {
+                            x: 5; y: 5; width: 9; height: 7; radius: 1.5
+                            color: tileColor
+                            opacity: 0.95
+                        }
+                    }
+
                     // F. Columns (3 or 4 windows: vertical strips)
                     Item {
                         anchors.fill: parent
@@ -1610,12 +1634,13 @@ ShellUi.BarWidget {
                                 return base + "\n" + summary
                             }
                             if (root.isWorkspaceNative(modelData)) return base + "\n" + root.t("nativeNoLimit")
+                            if (root.isWorkspaceFloating(modelData)) return base + "\n" + root.t("floatingNoLimit")
                             var presetKey = root.autoPresetForWorkspace(modelData)
                             var presetDesc = presetKey === "none" ? root.t("nativeNoPreset") : (root.autoPresetLabel(presetKey) + (root.hasCustomPreset(modelData) ? root.t("custom") : root.t("default2")))
                             return base + "\n" + root.t("limitPreset", [root.capForWorkspace(modelData), presetDesc])
                         }
                         onClicked: root.selectedWorkspace = modelData
-                        onRightClicked: root.showHint(root.t("wsCardTitle", [wsCard.modelData]), wsCard.isManual ? root.t("wsCardManual", [wsCard.modelData, root.savedLayoutSummary(wsCard.modelData)]) : root.isWorkspaceNative(wsCard.modelData) ? root.t("wsCardNative", [wsCard.modelData]) : root.t("wsCardPresets", [wsCard.modelData, root.capForWorkspace(wsCard.modelData), root.autoPresetLabel(root.autoPresetForWorkspace(wsCard.modelData))]), root.t("tipLeftClickTo2"))
+                        onRightClicked: root.showHint(root.t("wsCardTitle", [wsCard.modelData]), wsCard.isManual ? root.t("wsCardManual", [wsCard.modelData, root.savedLayoutSummary(wsCard.modelData)]) : root.isWorkspaceNative(wsCard.modelData) ? root.t("wsCardNative", [wsCard.modelData]) : root.isWorkspaceFloating(wsCard.modelData) ? root.t("floatingBody") : root.t("wsCardPresets", [wsCard.modelData, root.capForWorkspace(wsCard.modelData), root.autoPresetLabel(root.autoPresetForWorkspace(wsCard.modelData))]), root.t("tipLeftClickTo2"))
                         Accessible.name: root.t("workspaceN", [modelData])
 
                         Item {
@@ -1660,7 +1685,7 @@ ShellUi.BarWidget {
                                 Text {
                                     anchors.right: parent.right
                                     anchors.verticalCenter: parent.verticalCenter
-                                    text: wsCard.isManual ? root.t("appPreset") : (root.isWorkspaceNative(wsCard.modelData) ? root.t("noLimit") : root.t("maxN", [root.capForWorkspace(wsCard.modelData)]))
+                                    text: wsCard.isManual ? root.t("appPreset") : (root.isWorkspaceNative(wsCard.modelData) ? root.t("noLimit") : root.isWorkspaceFloating(wsCard.modelData) ? root.t("floating") : root.t("maxN", [root.capForWorkspace(wsCard.modelData)]))
                                     color: (wsCard.isManual || root.hasCustomCap(wsCard.modelData)) ? Commons.Color.accent : Commons.Color.foreground
                                     font.family: Style.font.family
                                     font.pixelSize: wsCard.isManual ? Math.max(9, Style.font.caption - 2) : Style.font.caption
@@ -1772,7 +1797,7 @@ ShellUi.BarWidget {
                                         // Preset: 1 window
                                         Rectangle {
                                             anchors.fill: parent
-                                            visible: parent.capVal === 1 && parent.preset !== "none"
+                                            visible: parent.capVal === 1 && parent.preset !== "none" && parent.preset !== "floating"
                                             radius: 2
                                             color: Commons.Color.accentContainer || "#262b3d"
                                             border.width: 1
@@ -1785,7 +1810,7 @@ ShellUi.BarWidget {
                                         Row {
                                             anchors.fill: parent
                                             spacing: 2
-                                            visible: parent.capVal === 2 && parent.preset !== "stacked" && parent.preset !== "none"
+                                            visible: parent.capVal === 2 && parent.preset !== "stacked" && parent.preset !== "none" && parent.preset !== "floating"
                                             Rectangle {
                                                 width: (parent.width - 2) / 2
                                                 height: parent.height
@@ -1964,12 +1989,33 @@ ShellUi.BarWidget {
                                             anchors.fill: parent
                                             columns: 2
                                             spacing: 2
-                                            visible: parent.capVal === 4 && parent.preset !== "columns" && parent.preset !== "none"
+                                            visible: parent.capVal === 4 && parent.preset !== "columns" && parent.preset !== "none" && parent.preset !== "floating"
                                             Repeater {
                                                 model: 4
                                                 Rectangle {
                                                     width: (parent.width - 2) / 2
                                                     height: (parent.height - 2) / 2
+                                                    radius: 2
+                                                    color: Commons.Color.accentContainer || "#262b3d"
+                                                    border.width: 1
+                                                    border.color: Commons.Color.accent
+                                                    opacity: 0.85
+                                                    Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Commons.Color.accent }
+                                                }
+                                            }
+                                        }
+
+                                        // Preset: Floating - free windows overlapping
+                                        Item {
+                                            anchors.fill: parent
+                                            visible: parent.preset === "floating"
+                                            Repeater {
+                                                model: 2
+                                                Rectangle {
+                                                    x: index * parent.width * 0.3
+                                                    y: index * parent.height * 0.3
+                                                    width: parent.width * 0.7
+                                                    height: parent.height * 0.7
                                                     radius: 2
                                                     color: Commons.Color.accentContainer || "#262b3d"
                                                     border.width: 1
@@ -2172,7 +2218,7 @@ ShellUi.BarWidget {
                             visible: root.effectiveCapFor(root.selectedWorkspace) === 1
                             width: parent.width
                             text: root.t("oneWindowTiling")
-                            selected: !root.isWorkspaceNative(root.selectedWorkspace)
+                            selected: !root.isWorkspaceNative(root.selectedWorkspace) && !root.isWorkspaceFloating(root.selectedWorkspace)
                             bordered: true
                             focusable: true
                             onClicked: root.setWorkspaceAutoPreset(root.selectedWorkspace, "side-by-side")
@@ -2291,6 +2337,19 @@ ShellUi.BarWidget {
                                 onRightClicked: root.showHint(root.t("columnsPreset2"), root.t("dividesTheWorkspaceInto2"), "")
                                 tooltipText: root.t("columnsSideBySide2")
                             }
+                        }
+
+                        // Floating: every window floats, no limit (any window limit).
+                        Ui.Button {
+                            width: parent.width
+                            text: "❐  " + root.t("floating")
+                            selected: root.isWorkspaceFloating(root.selectedWorkspace)
+                            bordered: true
+                            focusable: true
+                            onClicked: root.toggleWorkspaceAutoPreset(root.selectedWorkspace, "floating")
+                            onRightClicked: root.showHint(root.t("floatingPreset"), root.t("floatingBody"), root.t("tipClickAgainTo"))
+                            tooltipText: root.t("floatingTip")
+                            Accessible.name: root.t("floatingPreset")
                         }
                     }
 

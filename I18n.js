@@ -368,7 +368,12 @@ var STRINGS = {
       "removeTip": "Delete saved layout and return Workspace {0} to Presets mode",
       "globalLimitN": "Global Limit: {0}",
       "globalLimitBody": "Sets the default maximum window limit ({0} windows) applied to all workspaces without custom overrides.",
-      "resetAllBody": "Removes all custom limits and presets, returning every workspace to global defaults ({0} limit, {1})."
+      "resetAllBody": "Removes all custom limits and presets, returning every workspace to global defaults ({0} limit, {1}).",
+      "floating": "Floating",
+      "floatingPreset": "Floating Preset",
+      "floatingTip": "Every window floats freely, like on a classic desktop. Click again to remove.",
+      "floatingBody": "New and open windows on this workspace float: move and resize them freely. No window limit. Choosing another preset or a limit tiles them again.",
+      "floatingNoLimit": "Floating windows · No window limit or automatic overflow"
   },
   de: {
       "settings": "Einstellungen",
@@ -661,7 +666,12 @@ var STRINGS = {
       "removeTip": "Gespeichertes Layout löschen und Arbeitsbereich {0} zurück in den Preset-Modus schalten",
       "globalLimitN": "Globale Grenze: {0}",
       "globalLimitBody": "Legt die Standard-Fenstergrenze ({0} Fenster) für alle Arbeitsbereiche ohne eigene Abweichungen fest.",
-      "resetAllBody": "Entfernt alle eigenen Grenzen und Presets und setzt jeden Arbeitsbereich auf die globalen Standards zurück ({0} Grenze, {1})."
+      "resetAllBody": "Entfernt alle eigenen Grenzen und Presets und setzt jeden Arbeitsbereich auf die globalen Standards zurück ({0} Grenze, {1}).",
+      "floating": "Schwebend",
+      "floatingPreset": "Preset Schwebend",
+      "floatingTip": "Jedes Fenster schwebt frei wie auf einem klassischen Desktop. Erneut klicken entfernt es.",
+      "floatingBody": "Neue und offene Fenster auf diesem Arbeitsbereich schweben: frei verschieben und in der Größe ändern. Keine Fenstergrenze. Ein anderes Preset oder eine Grenze kachelt sie wieder.",
+      "floatingNoLimit": "Schwebende Fenster · keine Fenstergrenze, kein automatischer Überlauf"
   },
   fr: {
       "settings": "Réglages",
@@ -954,7 +964,12 @@ var STRINGS = {
       "removeTip": "Supprimer la disposition enregistrée et remettre l’espace {0} en mode Presets",
       "globalLimitN": "Limite globale : {0}",
       "globalLimitBody": "Fixe la limite de fenêtres par défaut ({0} fenêtres) pour tous les espaces sans personnalisation.",
-      "resetAllBody": "Retire toutes les limites et presets personnalisés et remet chaque espace aux valeurs globales (limite {0}, {1})."
+      "resetAllBody": "Retire toutes les limites et presets personnalisés et remet chaque espace aux valeurs globales (limite {0}, {1}).",
+      "floating": "Flottant",
+      "floatingPreset": "Preset Flottant",
+      "floatingTip": "Chaque fenêtre flotte librement, comme sur un bureau classique. Cliquez à nouveau pour l'enlever.",
+      "floatingBody": "Les fenêtres nouvelles et ouvertes de cet espace flottent : déplacez-les et redimensionnez-les librement. Sans limite de fenêtres. Un autre preset ou une limite les remet en tuiles.",
+      "floatingNoLimit": "Fenêtres flottantes · sans limite de fenêtres ni débordement automatique"
   },
   es: {
       "settings": "Ajustes",
@@ -1247,7 +1262,12 @@ var STRINGS = {
       "removeTip": "Borrar la distribución guardada y devolver el espacio {0} al modo Presets",
       "globalLimitN": "Límite global: {0}",
       "globalLimitBody": "Fija el límite de ventanas predeterminado ({0} ventanas) para todos los espacios sin ajustes propios.",
-      "resetAllBody": "Quita todos los límites y presets propios y devuelve cada espacio a los valores globales (límite {0}, {1})."
+      "resetAllBody": "Quita todos los límites y presets propios y devuelve cada espacio a los valores globales (límite {0}, {1}).",
+      "floating": "Flotante",
+      "floatingPreset": "Preset Flotante",
+      "floatingTip": "Cada ventana flota libremente, como en un escritorio clásico. Haz clic de nuevo para quitarlo.",
+      "floatingBody": "Las ventanas nuevas y abiertas de este espacio flotan: muévelas y cambia su tamaño libremente. Sin límite de ventanas. Otro preset o un límite las vuelve a organizar en mosaico.",
+      "floatingNoLimit": "Ventanas flotantes · sin límite de ventanas ni desbordamiento automático"
   },
   it: {
       "settings": "Impostazioni",
@@ -1540,7 +1560,12 @@ var STRINGS = {
       "removeTip": "Elimina il layout salvato e riporta lo spazio {0} alla modalità Preset",
       "globalLimitN": "Limite globale: {0}",
       "globalLimitBody": "Imposta il limite di finestre predefinito ({0} finestre) per tutti gli spazi senza personalizzazioni.",
-      "resetAllBody": "Toglie tutti i limiti e preset personalizzati e riporta ogni spazio ai valori globali (limite {0}, {1})."
+      "resetAllBody": "Toglie tutti i limiti e preset personalizzati e riporta ogni spazio ai valori globali (limite {0}, {1}).",
+      "floating": "Fluttuante",
+      "floatingPreset": "Preset Fluttuante",
+      "floatingTip": "Ogni finestra fluttua liberamente, come su un desktop classico. Clicca di nuovo per rimuoverlo.",
+      "floatingBody": "Le finestre nuove e aperte di questo spazio fluttuano: spostale e ridimensionale liberamente. Nessun limite di finestre. Un altro preset o un limite le riaffianca.",
+      "floatingNoLimit": "Finestre fluttuanti · nessun limite di finestre né trabocco automatico"
   },
   pt: {
       "settings": "Configurações",
@@ -1833,7 +1858,12 @@ var STRINGS = {
       "removeTip": "Apagar o layout salvo e voltar a área {0} ao modo Presets",
       "globalLimitN": "Limite global: {0}",
       "globalLimitBody": "Define o limite de janelas padrão ({0} janelas) para todas as áreas sem ajustes próprios.",
-      "resetAllBody": "Remove todos os limites e presets próprios e volta cada área aos padrões globais (limite {0}, {1})."
+      "resetAllBody": "Remove todos os limites e presets próprios e volta cada área aos padrões globais (limite {0}, {1}).",
+      "floating": "Flutuante",
+      "floatingPreset": "Preset Flutuante",
+      "floatingTip": "Cada janela flutua livremente, como num ambiente de trabalho clássico. Clique de novo para remover.",
+      "floatingBody": "As janelas novas e abertas deste espaço flutuam: mova-as e redimensione-as livremente. Sem limite de janelas. Outro preset ou um limite volta a organizá-las em mosaico.",
+      "floatingNoLimit": "Janelas flutuantes · sem limite de janelas nem transbordo automático"
   },
   nl: {
       "settings": "Instellingen",
@@ -2126,7 +2156,12 @@ var STRINGS = {
       "removeTip": "Opgeslagen indeling verwijderen en werkruimte {0} terugzetten naar Presets-modus",
       "globalLimitN": "Globale limiet: {0}",
       "globalLimitBody": "Stelt de standaard vensterlimiet ({0} vensters) in voor alle werkruimten zonder eigen afwijkingen.",
-      "resetAllBody": "Verwijdert alle eigen limieten en presets en zet elke werkruimte terug naar de globale standaard (limiet {0}, {1})."
+      "resetAllBody": "Verwijdert alle eigen limieten en presets en zet elke werkruimte terug naar de globale standaard (limiet {0}, {1}).",
+      "floating": "Zwevend",
+      "floatingPreset": "Preset Zwevend",
+      "floatingTip": "Elk venster zweeft vrij, zoals op een klassiek bureaublad. Klik opnieuw om het te verwijderen.",
+      "floatingBody": "Nieuwe en open vensters op deze werkruimte zweven: vrij verplaatsen en van grootte veranderen. Geen vensterlimiet. Een ander preset of een limiet tegelt ze weer.",
+      "floatingNoLimit": "Zwevende vensters · geen vensterlimiet of automatische overloop"
   },
   pl: {
       "settings": "Ustawienia",
@@ -2420,6 +2455,11 @@ var STRINGS = {
       "removeTip": "Usuń zapisany układ i przywróć obszar {0} do trybu Presets",
       "globalLimitN": "Limit globalny: {0}",
       "globalLimitBody": "Ustawia domyślny limit okien ({0}) dla wszystkich obszarów bez własnych zmian.",
-      "resetAllBody": "Usuwa wszystkie własne limity i presety i przywraca każdemu obszarowi wartości globalne (limit {0}, {1})."
+      "resetAllBody": "Usuwa wszystkie własne limity i presety i przywraca każdemu obszarowi wartości globalne (limit {0}, {1}).",
+      "floating": "Pływające",
+      "floatingPreset": "Preset Pływające",
+      "floatingTip": "Każde okno swobodnie pływa, jak na klasycznym pulpicie. Kliknij ponownie, aby usunąć.",
+      "floatingBody": "Nowe i otwarte okna w tym obszarze pływają: przesuwaj je i zmieniaj ich rozmiar dowolnie. Bez limitu okien. Inny preset lub limit ponownie układa je kafelkowo.",
+      "floatingNoLimit": "Pływające okna · bez limitu okien i automatycznego przepełnienia"
   }
 }
