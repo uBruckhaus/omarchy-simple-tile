@@ -1,5 +1,13 @@
 # Release notes
 
+## 0.4.0 — 2026-10-19
+
+- New **Information** page behind the **ⓘ** button beside the gear: a card for each of the author's other marketplace plugins; a click opens its marketplace page in the browser. **← Back**, Backspace or Esc returns.
+
+## 0.3.2 — 2026-10-17
+
+- New **Floating** preset.
+
 ## 0.3.1 — 2026-10-17
 
 - Works with Qt 6.12: the shell palette is referenced as `Commons.Color`, because Qt 6.12 adds its own `Color` type that hid it and left panels and buttons without colours. Also works on Qt 6.11.

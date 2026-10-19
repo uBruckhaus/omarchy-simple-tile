@@ -88,6 +88,7 @@ ShellUi.BarWidget {
     property string activeHintBody: ""
     property string activeHintTip: ""
     property bool showSettingsView: false
+    property bool showInfoView: false
     // Interface language: the system's unless one is picked on the settings
     // page (stored in this widget's shell.json entry). Built-in translations.
     readonly property string systemLang: I18n.systemLanguage(Quickshell.env("LC_ALL"), Quickshell.env("LC_MESSAGES"), Quickshell.env("LANG"))
@@ -112,7 +113,7 @@ ShellUi.BarWidget {
     }
 
     onOpenedChanged: {
-        if (!opened) showSettingsView = false
+        if (!opened) { showSettingsView = false; showInfoView = false }
         if (opened) {
             restoreConflict = null
             if (selectedWorkspace === 0 && root.currentWsId > 0) {
@@ -1308,9 +1309,9 @@ ShellUi.BarWidget {
             width: parent.width
             spacing: Style.space(12)
             // Esc and Backspace leave the settings page first.
-            Keys.onEscapePressed: { if (root.showSettingsView) root.showSettingsView = false; else root.close() }
+            Keys.onEscapePressed: { if (root.showSettingsView || root.showInfoView) { root.showSettingsView = false; root.showInfoView = false } else root.close() }
             Keys.onPressed: function(event) {
-                if (event.key === Qt.Key_Backspace && root.showSettingsView) { root.showSettingsView = false; event.accepted = true }
+                if (event.key === Qt.Key_Backspace && (root.showSettingsView || root.showInfoView)) { root.showSettingsView = false; root.showInfoView = false; event.accepted = true }
             }
 
             Item {
@@ -1328,7 +1329,23 @@ ShellUi.BarWidget {
                 }
 
                 Ui.Button {
-                    visible: !root.showSettingsView
+                    id: infoButton
+                    visible: !root.showSettingsView && !root.showInfoView
+                    anchors.right: gearButton.left
+                    anchors.rightMargin: Style.space(6)
+                    anchors.verticalCenter: parent.verticalCenter
+                    implicitHeight: Style.space(24)
+                    text: "\u{F02FC}"
+                    fontSize: Style.font.caption
+                    bordered: true
+                    focusable: true
+                    onClicked: root.showInfoView = true
+                    tooltipText: root.t("information")
+                }
+
+                Ui.Button {
+                    id: gearButton
+                    visible: !root.showSettingsView && !root.showInfoView
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     implicitHeight: Style.space(24)
@@ -1351,7 +1368,7 @@ ShellUi.BarWidget {
             }
 
             Ui.Toggle {
-                visible: !root.showSettingsView
+                visible: !root.showSettingsView && !root.showInfoView
                 width: parent.width
                 label: root.tilingActive ? root.t("tilingActive") : root.t("tilingPaused")
                 description: root.t("moveNewWindowsWhen")
@@ -1440,6 +1457,41 @@ ShellUi.BarWidget {
                 }
             }
 
+            // INFORMATION VIEW: the author's other marketplace plugins.
+            Column {
+                visible: root.showInfoView
+                width: parent.width
+                spacing: Style.space(12)
+
+                Row {
+                    spacing: Style.space(12)
+                    Ui.Button {
+                        focusable: true
+                        bordered: true
+                        iconText: "\udb80\udc4d"
+                        text: root.t("back") + " · \u232b"
+                        tooltipText: root.t("backTip")
+                        anchors.verticalCenter: parent.verticalCenter
+                        onClicked: { root.showInfoView = false; content.forceActiveFocus() }
+                    }
+                    Text { textFormat: Text.PlainText; text: root.t("information").toUpperCase(); color: Commons.Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 1; anchors.verticalCenter: parent.verticalCenter }
+                }
+                Ui.PanelSeparator { width: parent.width }
+
+                MorePlugins {
+                    width: parent.width
+                    separated: false
+                    ownId: "ubruckhaus.simple-tile"
+                    // The panel is narrow: one more line before an explanation is cut.
+                    textLines: 4
+                    nameLines: 2
+                    lang: root.lang
+                    fg: Commons.Color.foreground
+                    fontFamily: Style.font.family
+                    onOpened: root.close()
+                }
+            }
+
             // SETTINGS VIEW: language and the global behaviour switches.
             Column {
                 id: settingsView
@@ -1518,7 +1570,7 @@ ShellUi.BarWidget {
             // MAIN WORKSPACE CONTROLS VIEW (hidden while the settings view is open)
             Column {
                 id: workspaceControlsView
-                visible: !root.showSettingsView
+                visible: !root.showSettingsView && !root.showInfoView
                 width: parent.width
                 spacing: Style.space(12)
 
