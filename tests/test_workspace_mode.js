@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const {test} = require('node:test');
 const path = require('node:path');
+const english = require('./english');
 const qml = fs.readFileSync(path.join(__dirname, '../BarWidget.qml'), 'utf8');
 
 function workspace(saved = false, saveSucceeds = true) {
@@ -17,6 +18,7 @@ function workspace(saved = false, saveSucceeds = true) {
         bar: {shell: {updateEntryInline: () => saveSucceeds}},
     });
     state.root = state;
+    Object.assign(state, english);
     state.helperScriptPath = () => '/plugin/simple_tile.py';
     for (const name of ['saveSettingsEntry', 'setWorkspaceMode', 'updateSetting', 'isWorkspaceManual',
                         'autoPresetForWorkspace', 'defaultAutoPresetFor', 'effectiveCapFor',

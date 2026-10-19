@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.4.1 — 2026-10-19
+
+- Tests only: the JavaScript tests give the functions they lift out of `BarWidget.qml` the plugin's English texts (`tests/english.js`), so they pass again; they had failed since 0.3.0 added the translations. No change to the plugin itself.
+
 ## 0.4.0 — 2026-10-19
 
 - New **Information** page behind the **ⓘ** button beside the gear: a card for each of the author's other marketplace plugins; a click opens its marketplace page in the browser. **← Back**, Backspace or Esc returns.

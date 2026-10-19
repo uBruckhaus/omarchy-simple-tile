@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const {test} = require('node:test');
+const english = require('./english');
 const qml = fs.readFileSync(path.join(__dirname, '../BarWidget.qml'), 'utf8');
 for (const succeeds of [true, false]) {
     test(`clear all presets, settings save succeeds: ${succeeds}`, () => {
@@ -10,6 +11,7 @@ for (const succeeds of [true, false]) {
         const state = vm.createContext({settings: original, moduleName: 'ubruckhaus.simple-tile', confirmClearAll: true,
             applyPresetWorker: {running: false}, bar: {shell: {updateEntryInline: () => succeeds}}, helperScriptPath: () => '/helper.py'});
         state.root = state;
+        Object.assign(state, english);
         vm.runInContext(qml.match(/    function saveSettingsEntry\([^]*?\n    }/)[0], state);
         vm.runInContext(qml.match(/    function clearAllPresets\([^]*?\n    }/)[0], state);
         state.clearAllPresets();
