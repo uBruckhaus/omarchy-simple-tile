@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.4.2 — 2026-10-20
+
+- Security (marketplace review of 0.4.1): **Save App Preset** no longer records a window's own `/proc/<pid>/cmdline` as its launch command, and restore never runs one saved by an older version. A sandboxed app could put a host program there, which Restore or the session autostart would then have run outside its sandbox. Missing apps start from their installed launcher; a window without one is reported as not restorable (new text in all 8 languages). The window class is no longer looked up on `PATH` either. A terminal's foreground command is still saved, but only from a terminal emulator installed under `/usr` in this session's own mount namespace, and restored only when it starts with that terminal.
+
 ## 0.4.1 — 2026-10-19
 
 - Tests only: the JavaScript tests give the functions they lift out of `BarWidget.qml` the plugin's English texts (`tests/english.js`), so they pass again; they had failed since 0.3.0 added the translations. No change to the plugin itself.

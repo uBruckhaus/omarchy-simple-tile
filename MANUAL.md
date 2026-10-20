@@ -117,9 +117,16 @@ Every button and control in Workspace Presets supports contextual right-click as
 ## Restore limits
 
 Restoration supports ungrouped, non-fullscreen rectangular tiling arrangements.
-It does not restore documents, terminal commands, or browser tabs. Monitor
-geometry and gaps can affect pixel sizes. Apps that cannot open another window
-may time out; the popup reports failures so you can retry.
+It does not restore documents or browser tabs. Monitor geometry and gaps can
+affect pixel sizes. Apps that cannot open another window may time out; the popup
+reports failures so you can retry.
+
+Missing apps are started from their installed launcher (`.desktop` file). A
+window with no matching launcher is not started: the popup says so. What a
+window's own process reports about itself (its command line, its class) is never
+run as a command, because a sandboxed app could name a host program there. The
+one command that is saved is the program running in a terminal window, and only
+when that window is a terminal installed on this computer (not a sandboxed one).
 
 ## Clear all presets
 

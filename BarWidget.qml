@@ -372,6 +372,7 @@ ShellUi.BarWidget {
             launch_failed: root.t("theAppCouldNot"),
             command_not_found: root.t("theSavedLaunchCommand"),
             desktop_file_not_found: root.t("theSavedAppLauncher"),
+            no_launcher: root.t("noLauncher"),
             workspace_move_failed: root.t("theWindowCouldNot"),
             app_launching_disabled: root.t("launchingMissingAppsIs")
         }

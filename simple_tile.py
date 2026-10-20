@@ -291,10 +291,35 @@ def parse_desktop_files():
     return apps
 
 
+TERMINAL_BINS = {"foot", "footclient", "alacritty", "kitty", "ghostty", "wezterm-gui", "xterm", "gnome-terminal-server"}
+
+
+def same_mount_namespace(pid):
+    """True only for a process in this session's own mount namespace. A sandboxed app (Flatpak,
+    bubblewrap, a container) has its own: what it says about itself (cmdline, children) is never
+    turned into a command."""
+    try:
+        return os.stat(f"/proc/{int(pid)}/ns/mnt").st_ino == os.stat("/proc/self/ns/mnt").st_ino
+    except (OSError, ValueError, TypeError):
+        return False
+
+
+def host_terminal(pid):
+    """The window's process is a terminal emulator installed on the host (its real executable, in
+    this namespace), not a window that only calls itself one through its class."""
+    if not same_mount_namespace(pid):
+        return False
+    try:
+        exe = Path(os.readlink(f"/proc/{int(pid)}/exe"))
+    except (OSError, ValueError):
+        return False
+    return exe.name.casefold() in TERMINAL_BINS and exe.is_absolute() and str(exe).startswith("/usr/")
+
+
 def get_terminal_active_command(pid, terminal_cls):
     """If the window is a terminal emulator, find the foreground/active command inside it."""
     shells = {"sh", "bash", "zsh", "fish", "dash", "csh", "tcsh", "login", "init", "systemd"}
-    terminal_bins = {"foot", "footclient", "alacritty", "kitty", "ghostty", "wezterm-gui", "xterm", "gnome-terminal-server"}
+    terminal_bins = TERMINAL_BINS
 
     def get_children(p):
         children = []
@@ -332,7 +357,7 @@ def get_terminal_active_command(pid, terminal_cls):
             except Exception:
                 exe_name = ""
 
-        if exe_name and exe_name not in shells and exe_name not in terminal_bins:
+        if exe_name and exe_name not in shells and exe_name not in terminal_bins and same_mount_namespace(curr):
             candidate_proc = (curr, exe_name)
         queue.extend(get_children(curr))
 
@@ -388,6 +413,7 @@ def get_terminal_active_command(pid, terminal_cls):
         "name": cname.capitalize(),
         "command": cname,
         "argv": argv,
+        "argv_source": "terminal",
         "cwd": cwd,
         "icon": "utilities-terminal",
     }
@@ -400,7 +426,7 @@ def resolve_app_for_client(client, desktop_apps):
 
     # 0. Check if this is a terminal running a specific CLI tool (e.g. codex, nvim)
     terminal_classes = {"foot", "footclient", "alacritty", "kitty", "ghostty", "wezterm", "xterm", "gnome-terminal"}
-    if pid and any(t in cls.lower() for t in terminal_classes):
+    if pid and any(t in cls.lower() for t in terminal_classes) and host_terminal(pid):
         active_cmd = get_terminal_active_command(pid, cls)
         if active_cmd:
             cmd_name = active_cmd["command"]
@@ -417,6 +443,7 @@ def resolve_app_for_client(client, desktop_apps):
                 "desktop_path": "",
                 "icon": icon,
                 "argv": active_cmd["argv"],
+                "argv_source": "terminal",
                 "cwd": active_cmd["cwd"],
             }
 
@@ -456,25 +483,16 @@ def resolve_app_for_client(client, desktop_apps):
         except OSError:
             pass
 
-    # 4. Fallback from cmdline or class
-    cmdline = []
-    if pid:
-        try:
-            raw = Path(f"/proc/{pid}/cmdline").read_bytes()
-            cmdline = [part.decode("utf-8", errors="ignore") for part in raw.split(b"\0") if part]
-            if len(cmdline) == 1 and " " in cmdline[0]:
-                import shlex
-                cmdline = shlex.split(cmdline[0])
-        except OSError:
-            pass
-
+    # 4. No installed launcher matches: the window is remembered for the layout, but nothing is
+    # recorded to start it. Its process's cmdline (and its class) are chosen by the app itself; a
+    # sandboxed app could name a host command there, which a restore would run outside the sandbox.
     return {
         "name": cls.capitalize() if cls else "Application",
         "class": cls,
         "desktop_id": cls.casefold(),
         "desktop_path": "",
         "icon": cls.casefold() if cls else "application-x-executable",
-        "argv": cmdline,
+        "argv": [],
     }
 
 
@@ -545,6 +563,7 @@ def capture_workspace(ws_id):
                     "desktop_id": app.get("desktop_id", ""),
                     "desktop_path": app.get("desktop_path", ""),
                     "argv": app.get("argv", []),
+                    "argv_source": app.get("argv_source", ""),
                 })
 
     session = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")
@@ -569,6 +588,25 @@ def capture_workspace(ws_id):
         "windows": windows,
         "apps": apps
     }
+
+
+def trusted_argv(app):
+    """A saved command that may be run: only a terminal's foreground command, captured from a host
+    terminal (argv_source "terminal", the terminal emulator first). Commands saved by older
+    versions from a window's own /proc cmdline are never run: their app starts from its launcher
+    instead, or not at all."""
+    argv = app.get("argv")
+    if app.get("argv_source") != "terminal" or not isinstance(argv, list) or not argv \
+            or not all(isinstance(a, str) for a in argv):
+        return []
+    return list(argv) if Path(argv[0]).name.casefold() in TERMINAL_BINS else []
+
+
+def restorable(app):
+    """The saved app as it may be started: its argv kept only when trusted_argv allows it."""
+    argv = trusted_argv(app)
+    kept = {k: v for k, v in app.items() if k != "argv"}
+    return dict(kept, argv=argv) if argv else kept
 
 
 def is_app_available(app):
@@ -610,15 +648,9 @@ def is_app_available(app):
                 app["desktop_path"] = str(candidate)
                 return True, "ok"
 
-    cls = app.get("class", "").lower()
-    if cls:
-        cmd = shutil.which(cls)
-        if cmd:
-            app["argv"] = [cmd]
-            return True, "ok"
-
-    # If neither desktop_path nor argv was specified, allow launch_app to attempt
-    return True, "ok"
+    # No launcher and no trusted command: the window's class is chosen by the app itself, so it is
+    # never looked up as a program to run.
+    return False, "no_launcher"
 
 
 def send_notification(title, body, urgency="normal"):
@@ -1066,6 +1098,7 @@ def _restore_workspace(ws_id, dry_run=False, conflict_action="ask"):
                 if layout.get("saveApps") is False:
                     failed.append({"name": name, "reason": "app_launching_disabled"})
                     continue
+                app = restorable(app)
                 available, reason = is_app_available(app)
                 if not available:
                     failed.append({"name": name, "reason": reason})

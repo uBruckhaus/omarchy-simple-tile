@@ -37,7 +37,10 @@ class RestoreTests(unittest.TestCase):
         missing = window("0x2", "google-chrome", ws=2, title="Second")
         extra = window("0x99", "other", ws=2)
         active_window = window("0xaa", "editor", ws=1)
-        app = {"class": "google-chrome", "name": "Google Chrome", "argv": ["chrome"]}
+        # Started from its installed launcher (a saved raw command is never run: test_untrusted_*).
+        launcher = Path(self.enterContext(tempfile.TemporaryDirectory())) / "google-chrome.desktop"
+        launcher.write_text("[Desktop Entry]\nExec=chrome %U\n")
+        app = {"class": "google-chrome", "name": "Google Chrome", "desktop_path": str(launcher)}
         settings = {"workspace_layouts": {2: {"windows": [chrome, missing], "apps": [app]}}}
         state = {"active": 1, "clients": [chrome, extra, active_window]}
 
@@ -73,6 +76,55 @@ class RestoreTests(unittest.TestCase):
         self.assertIn(active_window, state["clients"])
         self.assertEqual(len(geometry.call_args.args[1]), 2)
         popen.assert_called_once()
+
+    def test_untrusted_saved_commands_are_never_run(self):
+        """A preset saved by 0.4.1 or older can hold a window's own /proc cmdline as argv (a
+        sandboxed app could put a host command there). Restore never runs it: the app starts from
+        its launcher, or is reported as not restorable."""
+        evil = ["python3", "-c", "open('/tmp/pwned','w')"]
+        settings = {"workspace_layouts": {2: {"windows": [window("0x1", "sneaky")],
+                                              "apps": [{"class": "sneaky", "name": "Sneaky", "argv": evil}]}}}
+
+        def hypr(*args):
+            return json.dumps({"id": 1}) if args[0] == "activeworkspace" else "[]" if args[0] == "clients" else "ok"
+        with patch.object(tile, "read_settings", return_value=settings), patch.object(tile, "runtime_lock"), \
+                patch.object(tile, "hypr", side_effect=hypr), patch.object(tile, "get_desktop_directories", return_value=[]), \
+                patch.object(tile.subprocess, "Popen") as popen, patch.object(tile, "restore_geometry"):
+            result = tile.restore_workspace(2)
+        popen.assert_not_called()
+        self.assertEqual(result["failed"], [{"name": "Sneaky", "reason": "no_launcher"}])
+        # Labelled as a terminal command but not starting with a terminal: not run either.
+        self.assertEqual(tile.trusted_argv({"argv": evil, "argv_source": "terminal"}), [])
+        self.assertEqual(tile.trusted_argv({"argv": ["/usr/bin/foot", "nvim"], "argv_source": "terminal"}),
+                         ["/usr/bin/foot", "nvim"])
+
+    def test_window_class_is_never_a_program(self):
+        """No launcher, no trusted command: the class (chosen by the app) is not looked up on PATH."""
+        with patch.object(tile, "get_desktop_directories", return_value=[]):
+            self.assertEqual(tile.is_app_available({"class": "python3"}), (False, "no_launcher"))
+
+    def test_capture_ignores_a_windows_own_cmdline(self):
+        """An unmatched window: its /proc cmdline is not recorded as a command."""
+        with patch.object(tile.os, "readlink", side_effect=OSError), \
+                patch.object(tile.Path, "read_bytes", return_value=b"python3\0-c\0evil\0"):
+            app = tile.resolve_app_for_client({"class": "sneaky", "pid": 4242}, [])
+        self.assertEqual(app["argv"], [])
+
+    def test_terminal_class_from_a_sandbox_is_not_a_terminal(self):
+        """A window calling itself "foot" whose process is in another mount namespace (a sandbox),
+        or whose executable is not an installed terminal, gets no command from its children."""
+        with patch.object(tile, "same_mount_namespace", return_value=False), \
+                patch.object(tile, "get_terminal_active_command") as active:
+            tile.resolve_app_for_client({"class": "foot", "pid": 4242}, [])
+        active.assert_not_called()
+        with patch.object(tile, "same_mount_namespace", return_value=True), \
+                patch.object(tile.os, "readlink", return_value="/home/x/.local/bin/foot"):
+            self.assertFalse(tile.host_terminal(4242))
+        with patch.object(tile, "same_mount_namespace", return_value=True), \
+                patch.object(tile.os, "readlink", return_value="/usr/bin/foot"):
+            self.assertTrue(tile.host_terminal(4242))
+        self.assertTrue(tile.same_mount_namespace(os.getpid()))
+        self.assertFalse(tile.same_mount_namespace("1; rm"))
 
     def test_waits_for_matching_new_window_even_on_wrong_workspace(self):
         old = window('0x1')

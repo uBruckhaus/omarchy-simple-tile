@@ -27,8 +27,10 @@ optional session autostart brings your saved workspaces back after login.
   instant pause/resume from the bar.
 
 Restoration supports ungrouped, non-fullscreen rectangular tiled arrangements
-and saved floating geometry. It does not restore app content such as documents,
-terminal commands, or browser tabs. Monitor geometry and gaps can affect exact
+and saved floating geometry. It does not restore app content such as documents
+or browser tabs. Missing apps start from their installed launcher; a window's
+own command line is never run (a terminal's foreground command only from a
+terminal installed on this computer). Monitor geometry and gaps can affect exact
 pixel sizes, and apps that cannot open another window may time out.
 
 ## Listing metadata
