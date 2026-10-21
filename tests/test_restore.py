@@ -122,6 +122,67 @@ class RestoreTests(unittest.TestCase):
         with patch.object(tile, "get_desktop_directories", return_value=[]):
             self.assertEqual(tile.is_app_available({"class": "python3"}), (False, "no_launcher"))
 
+    def test_window_class_is_never_a_launcher_path(self):
+        """An unmatched class (chosen by the app, e.g. a sandboxed app with a host-visible data
+        folder) never becomes a launcher name; a saved absolute or ../ ID or a saved path that is
+        not an installed launcher is never resolved, even when a file waits at the joined path."""
+        with tempfile.TemporaryDirectory() as root:
+            apps = Path(root) / "applications"
+            apps.mkdir()
+            planted = Path(root) / "evil.desktop"
+            planted.write_text("[Desktop Entry]\nName=Evil\nExec=python3 -c evil\n")
+            good = apps / "org.example.Good.desktop"
+            good.write_text("[Desktop Entry]\nName=Good\nExec=good\n")
+            with patch.object(tile, "get_desktop_directories", return_value=[apps]), \
+                    patch.object(tile.os, "readlink", side_effect=OSError):
+                captured = tile.resolve_app_for_client({"class": "../evil", "pid": 4242},
+                                                       tile.parse_desktop_files())
+                self.assertEqual(captured["desktop_id"], "")
+                self.assertEqual(tile.is_app_available(captured), (False, "no_launcher"))
+                for saved in ({"desktop_id": "../evil"}, {"desktop_id": str(planted)[:-8]},
+                              {"desktop_id": "../../" + str(planted)[1:-8]}):
+                    self.assertEqual(tile.is_app_available(dict(saved)), (False, "no_launcher"), saved)
+                    self.assertEqual(tile.installed_launcher(saved), "")
+                app = {"desktop_path": str(planted)}
+                self.assertEqual(tile.is_app_available(app), (False, "desktop_file_not_found"))
+                self.assertEqual(app["desktop_path"], "")
+                app = {"desktop_path": str(apps / ".." / "evil.desktop"), "desktop_id": "evil"}
+                self.assertEqual(tile.is_app_available(app), (False, "desktop_file_not_found"))
+                with patch.object(tile.subprocess, "Popen") as popen, \
+                        patch.object(tile.shutil, "which", return_value="/usr/bin/uwsm-app"):
+                    self.assertFalse(tile.launch_app({"desktop_path": str(planted)}))
+                    popen.assert_not_called()
+                    # An installed launcher still starts, found by its path or its ID.
+                    app = {"desktop_id": "org.example.Good", "desktop_path": "/old/org.example.Good.desktop"}
+                    self.assertEqual(tile.is_app_available(app), (True, "ok"))
+                    self.assertEqual(app["desktop_path"], str(good))
+                    self.assertTrue(tile.launch_app(app))
+                    self.assertEqual(popen.call_args[0][0], ["uwsm-app", "--", str(good)])
+
+    def test_restore_never_starts_a_planted_launcher(self):
+        """A preset saved by 0.5.1 or older holds the unmatched class as desktop_id: restore
+        reports it as not restorable and starts nothing."""
+        with tempfile.TemporaryDirectory() as root:
+            apps = Path(root) / "applications"
+            apps.mkdir()
+            (Path(root) / "sneaky.desktop").write_text("[Desktop Entry]\nName=S\nExec=evil\n")
+            settings = {"workspace_layouts": {2: {"windows": [window("0x1", "../sneaky")],
+                                                  "apps": [{"class": "../sneaky", "name": "Sneaky",
+                                                            "desktop_id": "../sneaky", "desktop_path": ""}]}}}
+
+            def hypr(*args):
+                return json.dumps({"id": 1}) if args[0] == "activeworkspace" else "[]" if args[0] == "clients" else "ok"
+            with patch.object(tile, "read_settings", return_value=settings), patch.object(tile, "runtime_lock"), \
+                    patch.object(tile, "hypr", side_effect=hypr), patch.object(tile, "get_desktop_directories", return_value=[apps]), \
+                    patch.object(tile.subprocess, "Popen") as popen, patch.object(tile, "restore_geometry"):
+                result = tile.restore_workspace(2)
+        popen.assert_not_called()
+        self.assertEqual(result["failed"], [{"name": "Sneaky", "reason": "no_launcher"}])
+        self.assertFalse(tile.valid_desktop_id("/tmp/x"))
+        self.assertFalse(tile.valid_desktop_id(".."))
+        self.assertTrue(tile.valid_desktop_id("Google Maps"))
+        self.assertTrue(tile.valid_desktop_id("org.mozilla.firefox"))
+
     def test_capture_ignores_a_windows_own_cmdline(self):
         """An unmatched window: its /proc cmdline is not recorded as a command."""
         with patch.object(tile.os, "readlink", side_effect=OSError), \

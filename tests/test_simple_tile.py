@@ -430,7 +430,9 @@ class AppLaunchTests(unittest.TestCase):
 
     def test_launch_desktop_with_uwsm(self):
         app = {"desktop_path": "/usr/share/applications/test.desktop"}
+        installed = [{"desktop_path": "/usr/share/applications/test.desktop", "desktop_id": "test"}]
         with patch.object(tile.shutil, "which", return_value="/usr/bin/uwsm-app"), \
+                patch.object(tile, "parse_desktop_files", return_value=installed), \
                 patch.object(tile.subprocess, "Popen") as popen:
             self.assertTrue(tile.launch_app(app))
             popen.assert_called_once_with(

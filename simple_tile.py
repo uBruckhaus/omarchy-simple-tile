@@ -292,6 +292,32 @@ def parse_desktop_files():
     return apps
 
 
+def valid_desktop_id(value):
+    """A launcher name as an installed .desktop file has it: one file name (Omarchy's web apps
+    have spaces), no "/", NUL or leading dot. A window class (chosen by the app itself) that is
+    not one never becomes a launcher name."""
+    return isinstance(value, str) and 0 < len(value) <= 255 and "/" not in value \
+        and "\0" not in value and not value.startswith(".")
+
+
+def installed_launcher(app, desktop_apps=None):
+    """The installed .desktop file a saved app starts from, or "". Only the records of
+    parse_desktop_files count: the saved desktop_path must be one of them, else the saved
+    (validated) desktop_id must name one. A saved path or ID is never joined onto a directory."""
+    records = parse_desktop_files() if desktop_apps is None else desktop_apps
+    saved_path = app.get("desktop_path")
+    if isinstance(saved_path, str) and saved_path:
+        for record in records:
+            if record["desktop_path"] == saved_path:
+                return record["desktop_path"]
+    desktop_id = app.get("desktop_id") or (Path(saved_path).stem if isinstance(saved_path, str) and saved_path else "")
+    if valid_desktop_id(desktop_id):
+        for record in records:
+            if record["desktop_id"] == desktop_id:
+                return record["desktop_path"]
+    return ""
+
+
 TERMINAL_BINS = {"foot", "footclient", "alacritty", "kitty", "ghostty", "wezterm-gui", "xterm", "gnome-terminal-server"}
 
 
@@ -440,7 +466,7 @@ def resolve_app_for_client(client, desktop_apps):
             return {
                 "name": active_cmd["name"],
                 "class": cls,
-                "desktop_id": cmd_name,
+                "desktop_id": cmd_name if valid_desktop_id(cmd_name) else "",
                 "desktop_path": "",
                 "icon": icon,
                 "argv": active_cmd["argv"],
@@ -487,10 +513,11 @@ def resolve_app_for_client(client, desktop_apps):
     # 4. No installed launcher matches: the window is remembered for the layout, but nothing is
     # recorded to start it. Its process's cmdline (and its class) are chosen by the app itself; a
     # sandboxed app could name a host command there, which a restore would run outside the sandbox.
+    # Its class is no launcher name either: the window is matched again by its class.
     return {
         "name": cls.capitalize() if cls else "Application",
         "class": cls,
-        "desktop_id": cls.casefold(),
+        "desktop_id": "",
         "desktop_path": "",
         "icon": cls.casefold() if cls else "application-x-executable",
         "argv": [],
@@ -629,25 +656,14 @@ def is_app_available(app):
             return True, "ok"
         return False, "command_not_found"
 
+    # Only an installed launcher starts the app (installed_launcher), never a saved path or ID.
     desktop_path = app.get("desktop_path", "")
+    launcher = installed_launcher(app) if desktop_path or app.get("desktop_id") else ""
+    app["desktop_path"] = launcher
+    if launcher:
+        return True, "ok"
     if desktop_path:
-        if Path(desktop_path).is_file():
-            return True, "ok"
-        desktop_id = app.get("desktop_id") or Path(desktop_path).stem
-        for directory in get_desktop_directories():
-            candidate = directory / f"{desktop_id}.desktop"
-            if candidate.is_file():
-                app["desktop_path"] = str(candidate)
-                return True, "ok"
         return False, "desktop_file_not_found"
-
-    desktop_id = app.get("desktop_id", "")
-    if desktop_id:
-        for directory in get_desktop_directories():
-            candidate = directory / f"{desktop_id}.desktop"
-            if candidate.is_file():
-                app["desktop_path"] = str(candidate)
-                return True, "ok"
 
     # No launcher and no trusted command: the window's class is chosen by the app itself, so it is
     # never looked up as a program to run.
@@ -757,6 +773,10 @@ def launch_app(app):
             return False
 
     desktop_path = app.get("desktop_path", "")
+    # Second check where it is started: only an installed launcher's own file (is_app_available
+    # put it there), so no other path can hand uwsm-app or Gio a file from elsewhere.
+    if desktop_path and desktop_path not in {r["desktop_path"] for r in parse_desktop_files()}:
+        return False
 
     # 1. Primary: uwsm-app
     if desktop_path and shutil.which("uwsm-app"):

@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.5.2 — 2026-10-21
+
+- Security (marketplace review of 0.5.1): a window that matched no installed launcher saved its class as the launcher name, and Restore joined that name onto the launcher folders, so an absolute or `../` class could reach a `.desktop` file outside them and `uwsm-app` or Gio would start it. A sandboxed app with a data folder the host can see could plant such a file. Now a launcher is only ever taken from the installed launchers themselves: a saved path must be one of them, a saved name must be one file name (no `/`, no leading dot) that one of them has, and an unmatched window saves no launcher name at all. Presets saved before keep working for apps with a real launcher; a window without one is reported as not restorable, as before.
+
 ## 0.5.1 — 2026-10-21
 
 - Fix: the helper's `--clear-app-preset` and `--clear-all-app-presets` commands crashed before doing anything (they passed a name to the runtime lock, which takes none); their tests had replaced the lock with a mock. They now use the shared lock, and `shell.json` is replaced through a private temporary file that keeps its permissions, instead of a fixed `shell.tmp` name. The popup does not use these commands.
