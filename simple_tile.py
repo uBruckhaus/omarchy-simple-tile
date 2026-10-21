@@ -1717,13 +1717,32 @@ def reset_all_presets(dry_run=False):
     return {"status": "ok", "action": "reset_all_presets", "default_preset": default_preset, "workspaces": ws_ids}
 
 
+def write_shell_config(path, config):
+    """Replace shell.json atomically, keeping its mode: the new file is a
+    private mkstemp file in the same directory, never a fixed name that a
+    planted symlink could redirect."""
+    mode = stat.S_IMODE(path.stat().st_mode)
+    fd, temp = tempfile.mkstemp(dir=path.parent, prefix="." + path.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            os.fchmod(stream.fileno(), mode)
+            json.dump(config, stream, indent=2)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temp, path)
+    except BaseException:
+        Path(temp).unlink(missing_ok=True)
+        raise
+
+
 def clear_app_preset(ws_id):
     if type(ws_id) is not int or ws_id <= 0:
         raise ValueError("invalid workspace id")
     path = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "omarchy/shell.json"
     if not path.exists():
         return {"status": "error", "message": "shell.json not found"}
-    with runtime_lock("settings"):
+    with runtime_lock():
         with path.open("r", encoding="utf-8") as f:
             config = json.load(f)
         found = False
@@ -1739,11 +1758,7 @@ def clear_app_preset(ws_id):
                         del modes[str(ws_id)]
                         found = True
         if found:
-            temp_path = path.with_suffix(".tmp")
-            with temp_path.open("w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
-                f.write("\n")
-            temp_path.replace(path)
+            write_shell_config(path, config)
         return {"status": "ok", "workspace": ws_id, "cleared": found}
 
 
@@ -1751,7 +1766,7 @@ def clear_all_app_presets():
     path = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "omarchy/shell.json"
     if not path.exists():
         return {"status": "error", "message": "shell.json not found"}
-    with runtime_lock("settings"):
+    with runtime_lock():
         with path.open("r", encoding="utf-8") as f:
             config = json.load(f)
         found = False
@@ -1765,11 +1780,7 @@ def clear_all_app_presets():
                         entry["workspaceModes"] = {k: v for k, v in entry["workspaceModes"].items() if v != "manual"}
                         found = True
         if found:
-            temp_path = path.with_suffix(".tmp")
-            with temp_path.open("w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
-                f.write("\n")
-            temp_path.replace(path)
+            write_shell_config(path, config)
         return {"status": "ok", "cleared": "all"}
 
 

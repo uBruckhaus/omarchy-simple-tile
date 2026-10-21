@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.5.1 — 2026-10-21
+
+- Fix: the helper's `--clear-app-preset` and `--clear-all-app-presets` commands crashed before doing anything (they passed a name to the runtime lock, which takes none); their tests had replaced the lock with a mock. They now use the shared lock, and `shell.json` is replaced through a private temporary file that keeps its permissions, instead of a fixed `shell.tmp` name. The popup does not use these commands.
+
 ## 0.5.0 — 2026-10-21
 
 - New **Scrolling** preset beside **Floating**: windows line up as full-height columns on a strip that scrolls sideways; no window limit or automatic overflow. New bar icon, card preview and texts in all 8 languages.
