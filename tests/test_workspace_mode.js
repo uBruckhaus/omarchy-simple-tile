@@ -14,6 +14,7 @@ function workspace(saved = false, saveSucceeds = true) {
         defaultAutoPresets: {'2': 'stacked'}, cap: 2,
         failedAppNames: {}, failedAppDetails: {},
         failed: false, activeWorkspaceTab: 'presets', lastMessage: '',
+        omarchyModes: {}, omarchyModesSupported: false,
         applyPresetWorker: {running: false},
         bar: {shell: {updateEntryInline: () => saveSucceeds}},
     });
@@ -24,7 +25,10 @@ function workspace(saved = false, saveSucceeds = true) {
                         'autoPresetForWorkspace', 'defaultAutoPresetFor', 'effectiveCapFor',
                         'hasCustomCap', 'autoPresetLabel', 'setWorkspaceAutoPreset',
                         'isWorkspaceNative', 'selectedWindowCap', 'setWorkspaceCap',
-                        'recordFailedApps', 'isAppFailed', 'restoreFailureText', 'restoreWorkspaceApps']) {
+                        'recordFailedApps', 'isAppFailed', 'restoreFailureText', 'restoreWorkspaceApps',
+                        'omarchyFreeMode', 'isWorkspaceFloating', 'isWorkspaceScrolling', 'isWorkspaceFree',
+                        'isModeFromOmarchy', 'expectOmarchyMode', 'hasCustomPreset',
+                        'toggleWorkspaceAutoPreset', 'removeWorkspaceAutoPreset']) {
         const match = qml.match(new RegExp('    function ' + name + '\\([^]*?\\n    }'));
         assert.ok(match, name);
         vm.runInContext(match[0], state);
@@ -150,4 +154,64 @@ test('restore command captures target workspace independently of the active work
     assert.deepEqual(Array.from(state.actionWorker.command).slice(-4), ['--restore-workspace', '2', '--conflict-action', 'close']);
     state.recordFailedApps(2, [{name: 'Chrome', reason: 'close_timeout'}]);
     assert.match(state.restoreFailureText(2), /Check Workspace 2 for a save or close-confirmation dialog/);
+});
+
+test('a workspace without its own preset shows the Omarchy mode set with Super + L', () => {
+    const state = workspace();
+    state.omarchyModesSupported = true;
+    state.workspaceAutoPresets = {'2': 'columns', '3': 'none'};
+    state.omarchyModes = {'2': 'floating', '3': 'scrolling', '4': 'floating', '5': 'dwindle'};
+    assert.equal(state.autoPresetForWorkspace(2), 'columns');  // its own preset wins
+    assert.equal(state.isModeFromOmarchy(2), false);
+    assert.equal(state.autoPresetForWorkspace(3), 'scrolling');  // Native follows Omarchy
+    assert.equal(state.isWorkspaceScrolling(3), true);
+    assert.equal(state.isModeFromOmarchy(3), true);
+    assert.equal(state.autoPresetForWorkspace(4), 'floating');
+    assert.equal(state.isWorkspaceFree(4), true);
+    assert.equal(state.isWorkspaceFree(5), false);
+    state.workspaceModes = {'4': 'manual'};
+    assert.equal(state.autoPresetForWorkspace(4), '');  // App Presets keep their own layout
+    assert.equal(state.isModeFromOmarchy(4), false);
+});
+test('Scrolling is a preset and clicking it again tiles the workspace', () => {
+    const state = workspace();
+    state.omarchyModesSupported = true;
+    state.omarchyModes = {'2': 'dwindle'};
+    state.toggleWorkspaceAutoPreset(2, 'scrolling');
+    assert.equal(state.workspaceAutoPresets['2'], 'scrolling');
+    assert.deepEqual(Array.from(state.applyPresetWorker.command).slice(-3), ['--apply-preset', '2', 'scrolling']);
+    assert.equal(state.omarchyModes['2'], 'scrolling');
+    state.toggleWorkspaceAutoPreset(2, 'scrolling');
+    assert.equal(state.workspaceAutoPresets['2'], undefined);
+    assert.equal(state.applyPresetWorker.command.at(-1), 'master-left');
+    assert.equal(state.omarchyModes['2'], 'dwindle');
+});
+test('clicking the mode Omarchy already shows turns it off instead of saving it', () => {
+    const state = workspace();
+    state.omarchyModesSupported = true;
+    state.workspaceAutoPresets = {};
+    state.omarchyModes = {'6': 'floating'};
+    state.toggleWorkspaceAutoPreset(6, 'floating');
+    assert.equal(state.workspaceAutoPresets['6'], undefined);
+    assert.equal(state.omarchyModes['6'], 'dwindle');
+    assert.equal(state.isWorkspaceFloating(6), false);
+    state.toggleWorkspaceAutoPreset(6, 'scrolling');
+    assert.equal(state.workspaceAutoPresets['6'], 'scrolling');
+});
+test('a limit tiles a workspace Omarchy floats', () => {
+    const state = workspace();
+    state.omarchyModesSupported = true;
+    state.workspaceAutoPresets = {};
+    state.defaultAutoPresets = {'2': 'none'};
+    state.omarchyModes = {'6': 'floating'};
+    state.setWorkspaceCap(6, 2);
+    assert.deepEqual(Array.from(state.applyPresetWorker.command).slice(-3), ['--apply-preset', '6', 'none']);
+    assert.equal(state.omarchyModes['6'], 'dwindle');
+    assert.equal(state.isWorkspaceFloating(6), false);
+});
+test('without Omarchy workspace modes nothing is assumed', () => {
+    const state = workspace();
+    state.omarchyModes = {};
+    state.expectOmarchyMode(2, 'floating');
+    assert.deepEqual(state.omarchyModes, {});
 });

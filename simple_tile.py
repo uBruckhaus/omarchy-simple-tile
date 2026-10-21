@@ -25,6 +25,7 @@ import shlex
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 
 PLUGIN_ID = "ubruckhaus.simple-tile"
@@ -54,8 +55,8 @@ def workspace_limit(ws_id, cap, workspace_caps=None, workspace_auto_presets=None
     limit = (workspace_caps or {}).get(ws_id, cap)
     preset = ((workspace_auto_presets or {}).get(ws_id)
               or (default_auto_presets or {}).get(str(limit)))
-    # Native tiling and floating workspaces take any number of windows.
-    return None if preset in ("none", "floating") else limit
+    # Native tiling, floating and scrolling workspaces take any number of windows.
+    return None if preset in ("none", "floating", "scrolling") else limit
 
 
 def pick_target_ws(workspaces, counts, current_ws_id, max_windows, workspace_caps=None,
@@ -1180,6 +1181,116 @@ def _autostart_all(dry_run):
     return {"status": "partial" if failures else "ok", "workspaces": started, "failed_count": failures}
 
 
+# Omarchy 4.5 gives every workspace a mode (Super + L): dwindle, scrolling or
+# floating. It saves each one as a small Lua file that calls o.workspace_mode
+# and loads them at every config load. The Floating and Scrolling presets are
+# that mode, so the Omarchy bar, the dock, titlebars and Super + L agree.
+OMARCHY_MODES = ("dwindle", "scrolling", "floating")
+FREE_PRESETS = ("floating", "scrolling")    # Presets without a window limit or overflow.
+MODE_FILE_MAX = 4096
+
+
+def omarchy_modes_supported():
+    return shutil.which("omarchy-hyprland-workspace-layout-current") is not None
+
+
+def omarchy_modes_dir():
+    state = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local/state")
+    return Path(state) / "omarchy/workspace-layouts"
+
+
+def read_mode_file(path, key):
+    """The quoted value of key in one of Omarchy's saved mode files, or None.
+    Only small regular files are read, never through a symlink."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except OSError:
+        return None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
+        text = os.read(fd, MODE_FILE_MAX).decode("utf-8", "replace")
+    finally:
+        os.close(fd)
+    match = re.search(r'\b%s\s*=\s*"([a-z]+)"' % key, text)
+    return match.group(1) if match else None
+
+
+def omarchy_default_mode():
+    mode = read_mode_file(omarchy_modes_dir() / "default.lua", "default")
+    if not mode:
+        try:
+            mode = json.loads(hypr("getoption", "general.layout", "-j")).get("str")
+        except Exception:
+            mode = None
+    return mode if mode in OMARCHY_MODES else "dwindle"
+
+
+def omarchy_workspace_modes(ws_ids):
+    """{workspace: mode} as Omarchy shows it: the workspace's saved mode, else
+    the default. Empty when this Omarchy has no workspace modes."""
+    if not omarchy_modes_supported():
+        return {}
+    default = omarchy_default_mode()
+    modes = {}
+    for ws_id in ws_ids:
+        if type(ws_id) is int and ws_id > 0:
+            mode = read_mode_file(omarchy_modes_dir() / ("%d.lua" % ws_id), "mode")
+            modes[ws_id] = mode if mode in OMARCHY_MODES else default
+    return modes
+
+
+def set_omarchy_mode(ws_id, mode, dry_run=False):
+    """Give ws_id Omarchy's mode, like Super + L: apply it now and save it so
+    it comes back after a reload or login. Returns False without Omarchy
+    workspace modes."""
+    if type(ws_id) is not int or ws_id <= 0 or mode not in OMARCHY_MODES:
+        raise ValueError("invalid workspace mode")
+    if not omarchy_modes_supported():
+        return False
+    if dry_run:
+        return True
+    output = hypr("eval", 'o.workspace_mode({ workspace = "%d", mode = "%s" })' % (ws_id, mode))
+    if "error" in output.lower():
+        raise RuntimeError("Omarchy did not take the workspace mode: " + output.strip())
+    directory = omarchy_modes_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    st = directory.lstat()
+    if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid():
+        raise RuntimeError("unsafe Omarchy workspace-layouts directory")
+    path = directory / ("%d.lua" % ws_id)
+    if mode == omarchy_default_mode():
+        # On the default the workspace follows it again, as Super + L does.
+        path.unlink(missing_ok=True)
+    else:
+        fd, temp = tempfile.mkstemp(dir=directory, prefix=".%d." % ws_id, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                stream.write('o.workspace_mode({ workspace = "%d", mode = "%s" })\n' % (ws_id, mode))
+            os.replace(temp, path)
+        except BaseException:
+            Path(temp).unlink(missing_ok=True)
+            raise
+    for target in ("omarchy.workspaces", "omarchy.dock"):
+        try:
+            subprocess.run(["omarchy-shell", "-q", target, "refresh"], capture_output=True, timeout=3)
+        except (OSError, subprocess.SubprocessError):
+            pass
+    # Titlebars come from a Hyprland plugin that only loads while the config
+    # loads, so the first floating workspace of a session needs a reload.
+    if mode == "floating":
+        try:
+            loaded = any(p.get("name") == "hyprbars" for p in json.loads(hypr("plugin", "list", "-j")))
+        except Exception:
+            loaded = True
+        if not loaded:
+            try:
+                hypr("reload")
+            except Exception:
+                pass
+    return True
+
+
 FLOAT_TAG = "workspace-presets-floating"   # Windows this plugin floated (tiled again later).
 FLOAT_WIDTH, FLOAT_HEIGHT = 0.6, 0.7       # A floated window's size, as part of the usable screen.
 FLOAT_CASCADE = 32                         # Each further floated window: this much right and down.
@@ -1230,15 +1341,47 @@ def unfloat_actions(ws_id, clients):
     return actions
 
 
-def apply_layout_preset(ws_id, preset, dry_run=False):
+def apply_layout_preset(ws_id, preset, dry_run=False, sync_mode=True):
+    """Apply preset to ws_id. sync_mode=False (a window opening) never changes
+    the workspace's Omarchy mode, so a Super + L choice is not undone."""
     if type(ws_id) is not int or ws_id <= 0:
         raise ValueError("invalid workspace id")
     preset = str(preset).lower()
-    all_valid = {"side-by-side", "stacked", "master-left", "master-right", "columns", "grid", "none", "floating"}
+    all_valid = {"side-by-side", "stacked", "master-left", "master-right", "columns", "grid", "none",
+                 "floating", "scrolling"}
     if preset not in all_valid:
         raise ValueError(f"invalid preset: {preset}")
 
     clients = json.loads(hypr("clients", "-j"))
+
+    if preset in FREE_PRESETS and sync_mode:
+        # Omarchy floats or scrolls the workspace itself, new windows included.
+        # Windows this plugin floated before Omarchy had modes are handed over.
+        actions = unfloat_actions(ws_id, clients) if preset == "scrolling" else []
+        if set_omarchy_mode(ws_id, preset, dry_run=dry_run):
+            if not dry_run:
+                for cmd, code in actions:
+                    try:
+                        hypr(cmd, code)
+                    except Exception:
+                        pass
+            return {"status": "ok", "workspace": ws_id, "preset": preset, "actions": len(actions) + 1}
+    if preset == "scrolling":
+        # Without Omarchy workspace modes: Hyprland's own scrolling layout.
+        if not dry_run:
+            for cmd, code in unfloat_actions(ws_id, clients):
+                try:
+                    hypr(cmd, code)
+                except Exception:
+                    pass
+            hypr("eval", 'hl.workspace_rule({ workspace = "%d", layout = "scrolling" })' % ws_id)
+        return {"status": "ok", "workspace": ws_id, "preset": preset, "actions": 1}
+    if sync_mode and omarchy_workspace_modes([ws_id]).get(ws_id) in FREE_PRESETS:
+        # A tiling preset tiles a floating or scrolling workspace again.
+        set_omarchy_mode(ws_id, "dwindle", dry_run=dry_run)
+        if not dry_run:
+            clients = json.loads(hypr("clients", "-j"))
+
     ws_clients = [c for c in clients if c.get("workspace", {}).get("id") == ws_id and is_tiled(c)]
 
     actions = []
@@ -1427,6 +1570,14 @@ def handle_open(address, dry_run=False):
                 return {"status": "manual", "workspace": source}
 
         workspaces = json.loads(hypr("workspaces", "-j"))
+        # A workspace Omarchy floats or scrolls (Super + L) counts as that
+        # preset: no window limit, no overflow, and no tiling preset on top.
+        omarchy = omarchy_workspace_modes(sorted(({w.get("id") for w in workspaces} | {source})
+                                                 - {None}))
+        free = {ws: mode for ws, mode in omarchy.items() if mode in FREE_PRESETS}
+        if free:
+            settings = dict(settings, workspace_auto_presets={
+                **settings.get("workspace_auto_presets", {}), **free})
         plan = plan_move(clients, workspaces, address, settings["cap"],
                          settings.get("workspace_caps"), settings.get("workspace_modes"),
                          settings.get("workspace_auto_presets"), settings.get("default_auto_presets"))
@@ -1436,9 +1587,9 @@ def handle_open(address, dry_run=False):
                 cap = settings.get("workspace_caps", {}).get(source, settings.get("cap", 2))
                 preset = (settings.get("workspace_auto_presets", {}).get(source)
                           or settings.get("default_auto_presets", {}).get(str(cap)))
-                if preset and preset != "none":
+                if preset and preset != "none" and not (omarchy and preset in FREE_PRESETS):
                     try:
-                        apply_layout_preset(source, preset, dry_run=dry_run)
+                        apply_layout_preset(source, preset, dry_run=dry_run, sync_mode=False)
                     except Exception:
                         pass
             return {"status": "unchanged"}
@@ -1457,13 +1608,75 @@ def handle_open(address, dry_run=False):
             cap = settings.get("workspace_caps", {}).get(target_ws, settings.get("cap", 2))
             preset = (settings.get("workspace_auto_presets", {}).get(target_ws)
                       or settings.get("default_auto_presets", {}).get(str(cap)))
-            if preset and preset != "none":
+            if preset and preset != "none" and not (omarchy and preset in FREE_PRESETS):
                 try:
-                    apply_layout_preset(target_ws, preset, dry_run=dry_run)
+                    apply_layout_preset(target_ws, preset, dry_run=dry_run, sync_mode=False)
                 except Exception:
                     pass
 
         return {"status": "moved", **plan}
+
+
+def is_manual_workspace(settings, ws_id):
+    mode = settings.get("workspace_modes", {}).get(ws_id)
+    if mode in ("auto", "manual"):
+        return mode == "manual"
+    layout = settings.get("workspace_layouts", {}).get(ws_id)
+    return isinstance(layout, dict) and layout.get("mode") == "manual"
+
+
+def mode_sync_plan(settings, omarchy_modes):
+    """At start: the presets set in this plugin win. A Floating or Scrolling
+    preset gives the workspace that Omarchy mode; a tiling preset or an App
+    Preset tiles a workspace Omarchy floats or scrolls. Workspaces without a
+    preset of their own (or Native) keep Omarchy's mode and show it."""
+    plan = []
+    presets = settings.get("workspace_auto_presets", {})
+    for ws_id, mode in sorted(omarchy_modes.items()):
+        if is_manual_workspace(settings, ws_id):
+            if mode in FREE_PRESETS:
+                plan.append((ws_id, "dwindle"))
+            continue
+        preset = presets.get(ws_id)
+        if preset in FREE_PRESETS:
+            if mode != preset:
+                plan.append((ws_id, preset))
+        elif preset not in (None, "none") and mode in FREE_PRESETS:
+            plan.append((ws_id, preset))
+    return plan
+
+
+def sync_modes(start=False, dry_run=False):
+    """Report every workspace's Omarchy mode; with start, also apply the plan."""
+    if not omarchy_modes_supported():
+        return {"status": "ok", "supported": False, "modes": {}, "applied": []}
+    settings = read_settings()
+    ws_ids = set(range(1, 11)) | set(settings.get("workspace_auto_presets", {}))
+    try:
+        for path in omarchy_modes_dir().glob("*.lua"):
+            if path.stem.isdigit() and 0 < int(path.stem) < 10000:
+                ws_ids.add(int(path.stem))
+    except OSError:
+        pass
+    modes = omarchy_workspace_modes(sorted(ws_ids))
+    applied = []
+    if start and settings.get("enabled"):
+        # Every bar (one per monitor) starts this; the first one does the work.
+        with runtime_lock():
+            modes = omarchy_workspace_modes(sorted(ws_ids))
+            for ws_id, preset in mode_sync_plan(settings, modes):
+                try:
+                    if preset == "dwindle":
+                        set_omarchy_mode(ws_id, "dwindle", dry_run=dry_run)
+                    else:
+                        apply_layout_preset(ws_id, preset, dry_run=dry_run)
+                    applied.append({"workspace": ws_id, "preset": preset})
+                except Exception:
+                    pass
+            if applied and not dry_run:
+                modes = omarchy_workspace_modes(sorted(ws_ids))
+    return {"status": "ok", "supported": True, "applied": applied,
+            "modes": {str(ws): mode for ws, mode in modes.items()}}
 
 
 def remove_all_presets(dry_run=False):
@@ -1575,9 +1788,14 @@ def main(argv=None):
     parser.add_argument("--reset-all-presets", action="store_true", help="reset all workspaces to default layout preset")
     parser.add_argument("--clear-app-preset", type=int, metavar="WS_ID", help="remove saved app preset for workspace")
     parser.add_argument("--clear-all-app-presets", action="store_true", help="remove all saved app presets across all workspaces")
+    parser.add_argument("--sync-modes", choices=["read", "start"],
+                        help="report Omarchy workspace modes; 'start' also lines them up with the presets")
     args = parser.parse_args(argv)
 
     try:
+        if args.sync_modes:
+            print(json.dumps(sync_modes(args.sync_modes == "start", args.dry_run)))
+            return 0
         if args.capture_workspace is not None:
             print(json.dumps(capture_workspace(args.capture_workspace)))
             return 0

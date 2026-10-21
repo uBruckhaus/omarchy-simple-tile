@@ -8,6 +8,25 @@ from unittest.mock import patch
 import simple_tile as tile
 
 
+# Tests never touch this machine's Omarchy: no workspace modes unless a test
+# turns them on, and any state goes to a throwaway directory.
+_guards = []
+
+
+def setUpModule():
+    state = tempfile.TemporaryDirectory()
+    _guards.append(state)
+    for patcher in (patch.object(tile, "omarchy_modes_supported", return_value=False),
+                    patch.dict(os.environ, {"XDG_STATE_HOME": state.name})):
+        patcher.start()
+        _guards.append(patcher)
+
+
+def tearDownModule():
+    for guard in reversed(_guards):
+        (guard.stop if hasattr(guard, "stop") else guard.cleanup)()
+
+
 def client(address="0xaa", workspace=1, **values):
     return dict(address=address, workspace={"id": workspace}, mapped=True,
                 floating=False, fullscreen=0, hidden=False, grouped=[], **values)
@@ -754,3 +773,186 @@ class AppLaunchTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OmarchyModeTests(unittest.TestCase):
+    """Omarchy 4.5 workspace modes (Super + L) and the Floating/Scrolling presets."""
+
+    def setUp(self):
+        self.state = tempfile.TemporaryDirectory()
+        self.addCleanup(self.state.cleanup)
+        self.dir = Path(self.state.name) / "omarchy/workspace-layouts"
+        for patcher in (patch.object(tile, "omarchy_modes_supported", return_value=True),
+                        patch.dict(os.environ, {"XDG_STATE_HOME": self.state.name})):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def save(self, name, text):
+        self.dir.mkdir(parents=True, exist_ok=True)
+        (self.dir / name).write_text(text)
+
+    def fake_hypr(self, clients=(), plugins=()):
+        calls = []
+
+        def fake(*args):
+            calls.append(args)
+            if args[0] == "getoption":
+                return json.dumps({"str": "dwindle"})
+            if args[0] == "plugin":
+                return json.dumps(list(plugins))
+            if args[0] == "eval":
+                return "ok"
+            return json.dumps(list(clients))
+        return calls, fake
+
+    def test_modes_read_saved_files_and_default(self):
+        self.save("3.lua", 'o.workspace_mode({ workspace = "3", mode = "floating" })\n')
+        self.save("4.lua", 'o.workspace_mode({ workspace = "4", mode = "scrolling" })\n')
+        self.save("5.lua", 'o.workspace_mode({ workspace = "5", mode = "bogus" })\n')
+        self.save("default.lua", 'o.workspace_mode({ default = "scrolling" })\n')
+        modes = tile.omarchy_workspace_modes([1, 3, 4, 5, 0, -2])
+        self.assertEqual(modes, {1: "scrolling", 3: "floating", 4: "scrolling", 5: "scrolling"})
+
+    def test_modes_ignore_symlinks_and_huge_files(self):
+        target = Path(self.state.name) / "elsewhere.lua"
+        target.write_text('mode = "floating"')
+        self.dir.mkdir(parents=True)
+        (self.dir / "2.lua").symlink_to(target)
+        self.save("3.lua", " " * tile.MODE_FILE_MAX + 'mode = "floating"')
+        with patch.object(tile, "hypr", return_value=json.dumps({"str": "dwindle"})):
+            self.assertEqual(tile.omarchy_workspace_modes([2, 3]), {2: "dwindle", 3: "dwindle"})
+
+    def test_no_modes_without_omarchy_4_5(self):
+        with patch.object(tile, "omarchy_modes_supported", return_value=False):
+            self.assertEqual(tile.omarchy_workspace_modes([1, 2]), {})
+            self.assertFalse(tile.set_omarchy_mode(2, "floating"))
+
+    def test_set_mode_applies_saves_and_reloads_for_titlebars(self):
+        calls, fake = self.fake_hypr()
+        with patch.object(tile, "hypr", side_effect=fake), patch.object(tile.subprocess, "run") as run:
+            self.assertTrue(tile.set_omarchy_mode(7, "floating"))
+        self.assertIn(("eval", 'o.workspace_mode({ workspace = "7", mode = "floating" })'), calls)
+        self.assertEqual((self.dir / "7.lua").read_text(),
+                         'o.workspace_mode({ workspace = "7", mode = "floating" })\n')
+        self.assertIn(("reload",), calls)
+        refreshed = [c.args[0] for c in run.call_args_list]
+        self.assertIn(["omarchy-shell", "-q", "omarchy.workspaces", "refresh"], refreshed)
+
+    def test_set_mode_to_default_removes_the_saved_file(self):
+        self.save("7.lua", 'o.workspace_mode({ workspace = "7", mode = "scrolling" })\n')
+        calls, fake = self.fake_hypr(plugins=[{"name": "hyprbars"}])
+        with patch.object(tile, "hypr", side_effect=fake), patch.object(tile.subprocess, "run"):
+            tile.set_omarchy_mode(7, "dwindle")
+        self.assertFalse((self.dir / "7.lua").exists())
+        self.assertNotIn(("reload",), calls)
+
+    def test_set_mode_rejects_bad_input_before_any_command(self):
+        with patch.object(tile, "hypr") as hypr:
+            for ws, mode in ((0, "floating"), (-1, "dwindle"), ("2", "floating"), (2, "master"),
+                             (2, 'floating" }) os.execute("x') ):
+                with self.assertRaises(ValueError):
+                    tile.set_omarchy_mode(ws, mode)
+        hypr.assert_not_called()
+
+    def test_scrolling_preset_is_the_omarchy_mode(self):
+        clients = [dict(client("0x1", 2), floating=True, tags=[tile.FLOAT_TAG])]
+        calls, fake = self.fake_hypr(clients)
+        with patch.object(tile, "hypr", side_effect=fake), patch.object(tile.subprocess, "run"):
+            res = tile.apply_layout_preset(2, "scrolling")
+        self.assertEqual(res["preset"], "scrolling")
+        lua = [a[1] for a in calls if a[0] == "eval"]
+        self.assertIn('o.workspace_mode({ workspace = "2", mode = "scrolling" })', lua)
+        self.assertTrue(any('action="off"' in code and "0x1" in code for code in lua))
+        self.assertFalse(any("workspace_rule" in code for code in lua))
+
+    def test_floating_preset_is_the_omarchy_mode_not_plugin_floating(self):
+        calls, fake = self.fake_hypr([client("0x1", 2, monitor=0)], plugins=[{"name": "hyprbars"}])
+        with patch.object(tile, "hypr", side_effect=fake), patch.object(tile.subprocess, "run"):
+            tile.apply_layout_preset(2, "floating")
+        lua = [a[1] for a in calls if a[0] == "eval"]
+        self.assertEqual(lua, ['o.workspace_mode({ workspace = "2", mode = "floating" })'])
+
+    def test_scrolling_without_omarchy_modes_uses_a_layout_rule(self):
+        calls, fake = self.fake_hypr()
+        with patch.object(tile, "omarchy_modes_supported", return_value=False), \
+                patch.object(tile, "hypr", side_effect=fake):
+            tile.apply_layout_preset(2, "scrolling")
+        self.assertIn(("eval", 'hl.workspace_rule({ workspace = "2", layout = "scrolling" })'), calls)
+
+    def test_tiling_preset_tiles_an_omarchy_floating_workspace(self):
+        self.save("2.lua", 'o.workspace_mode({ workspace = "2", mode = "floating" })\n')
+        calls, fake = self.fake_hypr(plugins=[{"name": "hyprbars"}])
+        with patch.object(tile, "hypr", side_effect=fake), patch.object(tile.subprocess, "run"):
+            tile.apply_layout_preset(2, "master-left")
+        lua = [a[1] for a in calls if a[0] == "eval"]
+        self.assertEqual(lua[0], 'o.workspace_mode({ workspace = "2", mode = "dwindle" })')
+        self.assertTrue(any('orientation = "left"' in code for code in lua))
+        self.assertFalse((self.dir / "2.lua").exists())
+
+    def test_window_open_never_changes_the_omarchy_mode(self):
+        self.save("2.lua", 'o.workspace_mode({ workspace = "2", mode = "floating" })\n')
+        calls, fake = self.fake_hypr()
+        with patch.object(tile, "hypr", side_effect=fake):
+            tile.apply_layout_preset(2, "master-left", sync_mode=False)
+        self.assertFalse(any("workspace_mode" in str(a) for a in calls))
+        self.assertTrue((self.dir / "2.lua").exists())
+
+    def test_open_on_omarchy_floating_workspace_neither_moves_nor_tiles(self):
+        self.save("1.lua", 'o.workspace_mode({ workspace = "1", mode = "floating" })\n')
+        clients = [client(f"0x{i:x}") for i in range(1, 6)]
+        settings = {"enabled": True, "cap": 2, "workspace_caps": {}, "workspace_modes": {},
+                    "workspace_layouts": {}, "workspace_auto_presets": {1: "side-by-side"},
+                    "default_auto_presets": {}}
+        calls, fake = self.fake_hypr(clients)
+
+        def hypr(*args):
+            return json.dumps(WORKSPACES) if args[0] == "workspaces" else fake(*args)
+        with patch.object(tile, "read_settings", return_value=settings), \
+                patch.object(tile, "hypr", side_effect=hypr), \
+                patch.object(tile, "runtime_lock"):
+            self.assertEqual(tile.handle_open("0x5")["status"], "unchanged")
+        self.assertFalse(any(a[0] == "eval" for a in calls))
+
+    def test_scrolling_workspace_has_no_limit(self):
+        clients = [client(f"0x{i:x}") for i in range(1, 9)]
+        self.assertIsNone(tile.plan_move(clients, WORKSPACES, "0x8", 2,
+                                        workspace_auto_presets={1: "scrolling"}))
+
+    def test_start_plan_presets_here_win_others_keep_omarchy(self):
+        settings = {"workspace_auto_presets": {1: "floating", 2: "master-left", 3: "none",
+                                               5: "scrolling", 6: "scrolling"},
+                    "workspace_modes": {7: "manual"}, "workspace_layouts": {8: {"mode": "manual"}}}
+        omarchy = {1: "dwindle", 2: "floating", 3: "scrolling", 4: "floating",
+                   5: "floating", 6: "scrolling", 7: "scrolling", 8: "dwindle", 9: "dwindle"}
+        self.assertEqual(tile.mode_sync_plan(settings, omarchy),
+                         [(1, "floating"), (2, "master-left"), (5, "scrolling"), (7, "dwindle")])
+
+    def test_sync_read_reports_modes_and_changes_nothing(self):
+        self.save("12.lua", 'o.workspace_mode({ workspace = "12", mode = "scrolling" })\n')
+        settings = {"enabled": True, "workspace_auto_presets": {2: "master-left"}}
+        self.save("2.lua", 'o.workspace_mode({ workspace = "2", mode = "floating" })\n')
+        calls, fake = self.fake_hypr()
+        with patch.object(tile, "read_settings", return_value=settings), \
+                patch.object(tile, "hypr", side_effect=fake):
+            res = tile.sync_modes(start=False)
+        self.assertEqual(res["modes"]["12"], "scrolling")
+        self.assertEqual(res["modes"]["2"], "floating")
+        self.assertEqual(res["applied"], [])
+        self.assertFalse(any(a[0] == "eval" for a in calls))
+
+    def test_sync_start_lines_omarchy_up_with_the_presets(self):
+        settings = {"enabled": True, "workspace_auto_presets": {3: "scrolling"},
+                    "workspace_modes": {}, "workspace_layouts": {}}
+        calls, fake = self.fake_hypr()
+        with patch.object(tile, "read_settings", return_value=settings), \
+                patch.object(tile, "hypr", side_effect=fake), \
+                patch.object(tile.subprocess, "run"), patch.object(tile, "runtime_lock"):
+            res = tile.sync_modes(start=True)
+        self.assertEqual(res["applied"], [{"workspace": 3, "preset": "scrolling"}])
+        self.assertEqual(res["modes"]["3"], "scrolling")
+        self.assertTrue((self.dir / "3.lua").exists())
+
+    def test_sync_without_omarchy_modes(self):
+        with patch.object(tile, "omarchy_modes_supported", return_value=False):
+            self.assertEqual(tile.sync_modes(start=True),
+                             {"status": "ok", "supported": False, "modes": {}, "applied": []})

@@ -46,6 +46,8 @@ When a workspace is in Presets mode, you can select how your windows arrange the
   - `◧ Master Right`: 1 large master on the right, 3 stacked on the left.
   - `|||| Columns`: 4 side-by-side vertical columns across the screen.
 - **❐ Floating** (any limit): every window on the workspace floats, like on a classic desktop. Open windows are floated, centred and cascaded; new windows open floating. No window limit and no automatic overflow. Choosing another preset, a limit or Native tiles the windows Floating floated again (windows that were floating before stay floating).
+- **⇆ Scrolling** (any limit): windows line up as full-height columns on a strip that scrolls sideways. No window limit and no automatic overflow. Choosing another preset, a limit or Native tiles the workspace again.
+- With **Omarchy 4.5**, Floating and Scrolling are the workspace's Omarchy mode (the one **Super + L** cycles), so Omarchy's bar, dock and titlebars agree with the popup. A workspace without a preset of its own shows the mode set with Super + L; at shell start, presets set in Workspace Presets win. Details: README, "Floating, Scrolling and Omarchy's workspace modes".
 - **✕ No Preset (Native)**: Uses Hyprland's native tiling with **no window limit and no automatic overflow**. None of the maximum-window buttons is selected. Choose a numbered limit or geometric preset to resume limited automatic tiling.
 
 ---

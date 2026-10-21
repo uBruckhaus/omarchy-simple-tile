@@ -389,7 +389,13 @@ var STRINGS = {
       "floatingPreset": "Floating Preset",
       "floatingTip": "Every window floats freely, like on a classic desktop. Click again to remove.",
       "floatingBody": "New and open windows on this workspace float: move and resize them freely. No window limit. Choosing another preset or a limit tiles them again.",
-      "floatingNoLimit": "Floating windows · No window limit or automatic overflow"
+      "floatingNoLimit": "Floating windows · No window limit or automatic overflow",
+      "scrolling": "Scrolling",
+      "scrollingPreset": "Scrolling Preset",
+      "scrollingTip": "Windows sit side by side as full-height columns on a strip you scroll through. Click again to remove.",
+      "scrollingBody": "New and open windows on this workspace line up as full-height columns on a strip that scrolls sideways. No window limit. Choosing another preset or a limit tiles them again.",
+      "scrollingNoLimit": "Scrolling columns · No window limit or automatic overflow",
+      "fromOmarchy": " · set in Omarchy (Super + L)"
   },
   de: {
       "settings": "Einstellungen",
@@ -703,7 +709,13 @@ var STRINGS = {
       "floatingPreset": "Preset Schwebend",
       "floatingTip": "Jedes Fenster schwebt frei wie auf einem klassischen Desktop. Erneut klicken entfernt es.",
       "floatingBody": "Neue und offene Fenster auf diesem Arbeitsbereich schweben: frei verschieben und in der Größe ändern. Keine Fenstergrenze. Ein anderes Preset oder eine Grenze kachelt sie wieder.",
-      "floatingNoLimit": "Schwebende Fenster · keine Fenstergrenze, kein automatischer Überlauf"
+      "floatingNoLimit": "Schwebende Fenster · keine Fenstergrenze, kein automatischer Überlauf",
+      "scrolling": "Scrollend",
+      "scrollingPreset": "Preset Scrollend",
+      "scrollingTip": "Fenster stehen als Spalten in voller Höhe nebeneinander auf einem Streifen, durch den du scrollst. Erneut klicken entfernt es.",
+      "scrollingBody": "Neue und offene Fenster auf diesem Arbeitsbereich reihen sich als Spalten in voller Höhe auf einem seitlich scrollenden Streifen. Keine Fenstergrenze. Ein anderes Preset oder eine Grenze kachelt sie wieder.",
+      "scrollingNoLimit": "Scrollende Spalten · keine Fenstergrenze, kein automatischer Überlauf",
+      "fromOmarchy": " · in Omarchy gesetzt (Super + L)"
   },
   fr: {
       "settings": "Réglages",
@@ -1017,7 +1029,13 @@ var STRINGS = {
       "floatingPreset": "Preset Flottant",
       "floatingTip": "Chaque fenêtre flotte librement, comme sur un bureau classique. Cliquez à nouveau pour l'enlever.",
       "floatingBody": "Les fenêtres nouvelles et ouvertes de cet espace flottent : déplacez-les et redimensionnez-les librement. Sans limite de fenêtres. Un autre preset ou une limite les remet en tuiles.",
-      "floatingNoLimit": "Fenêtres flottantes · sans limite de fenêtres ni débordement automatique"
+      "floatingNoLimit": "Fenêtres flottantes · sans limite de fenêtres ni débordement automatique",
+      "scrolling": "Défilant",
+      "scrollingPreset": "Preset Défilant",
+      "scrollingTip": "Les fenêtres se placent côte à côte en colonnes pleine hauteur sur une bande que l’on fait défiler. Cliquez à nouveau pour le retirer.",
+      "scrollingBody": "Les fenêtres nouvelles et ouvertes de cet espace de travail s’alignent en colonnes pleine hauteur sur une bande qui défile latéralement. Sans limite de fenêtres. Choisir un autre preset ou une limite les remet en mosaïque.",
+      "scrollingNoLimit": "Colonnes défilantes · sans limite de fenêtres ni débordement automatique",
+      "fromOmarchy": " · défini dans Omarchy (Super + L)"
   },
   es: {
       "settings": "Ajustes",
@@ -1331,7 +1349,13 @@ var STRINGS = {
       "floatingPreset": "Preset Flotante",
       "floatingTip": "Cada ventana flota libremente, como en un escritorio clásico. Haz clic de nuevo para quitarlo.",
       "floatingBody": "Las ventanas nuevas y abiertas de este espacio flotan: muévelas y cambia su tamaño libremente. Sin límite de ventanas. Otro preset o un límite las vuelve a organizar en mosaico.",
-      "floatingNoLimit": "Ventanas flotantes · sin límite de ventanas ni desbordamiento automático"
+      "floatingNoLimit": "Ventanas flotantes · sin límite de ventanas ni desbordamiento automático",
+      "scrolling": "Desplazable",
+      "scrollingPreset": "Preset Desplazable",
+      "scrollingTip": "Las ventanas quedan una junto a otra como columnas de altura completa en una franja que se desplaza. Haz clic otra vez para quitarlo.",
+      "scrollingBody": "Las ventanas nuevas y abiertas de este espacio de trabajo se alinean como columnas de altura completa en una franja que se desplaza de lado. Sin límite de ventanas. Elegir otro preset o un límite las vuelve a organizar en mosaico.",
+      "scrollingNoLimit": "Columnas desplazables · sin límite de ventanas ni desbordamiento automático",
+      "fromOmarchy": " · establecido en Omarchy (Super + L)"
   },
   it: {
       "settings": "Impostazioni",
@@ -1645,7 +1669,13 @@ var STRINGS = {
       "floatingPreset": "Preset Fluttuante",
       "floatingTip": "Ogni finestra fluttua liberamente, come su un desktop classico. Clicca di nuovo per rimuoverlo.",
       "floatingBody": "Le finestre nuove e aperte di questo spazio fluttuano: spostale e ridimensionale liberamente. Nessun limite di finestre. Un altro preset o un limite le riaffianca.",
-      "floatingNoLimit": "Finestre fluttuanti · nessun limite di finestre né trabocco automatico"
+      "floatingNoLimit": "Finestre fluttuanti · nessun limite di finestre né trabocco automatico",
+      "scrolling": "Scorrevole",
+      "scrollingPreset": "Preset Scorrevole",
+      "scrollingTip": "Le finestre stanno affiancate come colonne a tutta altezza su una striscia da scorrere. Fai clic di nuovo per rimuoverlo.",
+      "scrollingBody": "Le finestre nuove e aperte di questo workspace si allineano come colonne a tutta altezza su una striscia che scorre di lato. Nessun limite di finestre. Scegliere un altro preset o un limite le affianca di nuovo.",
+      "scrollingNoLimit": "Colonne scorrevoli · nessun limite di finestre né trabocco automatico",
+      "fromOmarchy": " · impostato in Omarchy (Super + L)"
   },
   pt: {
       "settings": "Configurações",
@@ -1959,7 +1989,13 @@ var STRINGS = {
       "floatingPreset": "Preset Flutuante",
       "floatingTip": "Cada janela flutua livremente, como num ambiente de trabalho clássico. Clique de novo para remover.",
       "floatingBody": "As janelas novas e abertas deste espaço flutuam: mova-as e redimensione-as livremente. Sem limite de janelas. Outro preset ou um limite volta a organizá-las em mosaico.",
-      "floatingNoLimit": "Janelas flutuantes · sem limite de janelas nem transbordo automático"
+      "floatingNoLimit": "Janelas flutuantes · sem limite de janelas nem transbordo automático",
+      "scrolling": "Deslizante",
+      "scrollingPreset": "Preset Deslizante",
+      "scrollingTip": "As janelas ficam lado a lado como colunas de altura total numa faixa que se desliza. Clique de novo para remover.",
+      "scrollingBody": "As janelas novas e abertas nesta área de trabalho alinham-se como colunas de altura total numa faixa que desliza para o lado. Sem limite de janelas. Escolher outro preset ou um limite volta a organizá-las em mosaico.",
+      "scrollingNoLimit": "Colunas deslizantes · sem limite de janelas nem transbordo automático",
+      "fromOmarchy": " · definido no Omarchy (Super + L)"
   },
   nl: {
       "settings": "Instellingen",
@@ -2273,7 +2309,13 @@ var STRINGS = {
       "floatingPreset": "Preset Zwevend",
       "floatingTip": "Elk venster zweeft vrij, zoals op een klassiek bureaublad. Klik opnieuw om het te verwijderen.",
       "floatingBody": "Nieuwe en open vensters op deze werkruimte zweven: vrij verplaatsen en van grootte veranderen. Geen vensterlimiet. Een ander preset of een limiet tegelt ze weer.",
-      "floatingNoLimit": "Zwevende vensters · geen vensterlimiet of automatische overloop"
+      "floatingNoLimit": "Zwevende vensters · geen vensterlimiet of automatische overloop",
+      "scrolling": "Scrollend",
+      "scrollingPreset": "Preset Scrollend",
+      "scrollingTip": "Vensters staan naast elkaar als kolommen over de volle hoogte op een strook waar je doorheen scrolt. Klik nogmaals om het te verwijderen.",
+      "scrollingBody": "Nieuwe en open vensters op deze werkruimte staan als kolommen over de volle hoogte op een strook die zijwaarts scrolt. Geen vensterlimiet. Een ander preset of een limiet tegelt ze weer.",
+      "scrollingNoLimit": "Scrollende kolommen · geen vensterlimiet of automatische overloop",
+      "fromOmarchy": " · ingesteld in Omarchy (Super + L)"
   },
   pl: {
       "settings": "Ustawienia",
@@ -2588,7 +2630,13 @@ var STRINGS = {
       "floatingPreset": "Preset Pływające",
       "floatingTip": "Każde okno swobodnie pływa, jak na klasycznym pulpicie. Kliknij ponownie, aby usunąć.",
       "floatingBody": "Nowe i otwarte okna w tym obszarze pływają: przesuwaj je i zmieniaj ich rozmiar dowolnie. Bez limitu okien. Inny preset lub limit ponownie układa je kafelkowo.",
-      "floatingNoLimit": "Pływające okna · bez limitu okien i automatycznego przepełnienia"
+      "floatingNoLimit": "Pływające okna · bez limitu okien i automatycznego przepełnienia",
+      "scrolling": "Przewijany",
+      "scrollingPreset": "Preset Przewijany",
+      "scrollingTip": "Okna stoją obok siebie jako kolumny na pełną wysokość na pasku, który się przewija. Kliknij ponownie, aby usunąć.",
+      "scrollingBody": "Nowe i otwarte okna w tym obszarze roboczym układają się jako kolumny na pełną wysokość na pasku przewijanym w bok. Bez limitu okien. Wybranie innego presetu lub limitu ponownie je kafelkuje.",
+      "scrollingNoLimit": "Przewijane kolumny · bez limitu okien i automatycznego przepełnienia",
+      "fromOmarchy": " · ustawione w Omarchy (Super + L)"
   }
 }
 

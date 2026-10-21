@@ -7,8 +7,10 @@
 - **Presets** give a workspace a window limit (1–4) and a tiling layout:
   side-by-side, stacked, master left or right, columns, or a 2×2 grid. New
   windows that don't fit move on to the next workspace with room. Or let a
-  workspace float: every window moves and resizes freely, like on a classic
-  desktop.
+  workspace float (every window moves and resizes freely, like on a classic
+  desktop) or scroll (full-height columns on a strip you scroll through).
+  With Omarchy 4.5 these are the workspace's own Omarchy mode, the one
+  **Super + L** cycles, so both always agree.
 - **App Presets** save the apps on a workspace and how they are arranged.
   Restore opens any missing apps and rebuilds the layout, with one click or
   automatically after login.
@@ -18,7 +20,7 @@
 - **Room to focus:** set a limit of 1–4 windows globally or per workspace.
   New overflow windows move forward to a workspace with room; focus follows.
 - **Layouts at a click:** side-by-side, stacked, master-left, master-right,
-  columns, a 2×2 grid, and Floating. Native mode removes limits and automatic overflow.
+  columns, a 2×2 grid, Floating and Scrolling. Native mode removes limits and automatic overflow.
 - **Your apps, your arrangement:** save an App Preset with window geometry
   and app icons, launch missing apps, and rebuild the saved layout.
 - **Restore on your terms:** move conflicting windows, close them, keep them
@@ -61,6 +63,35 @@ omarchy bar move ubruckhaus.simple-tile --section right
 omarchy plugin disable ubruckhaus.simple-tile
 omarchy plugin remove ubruckhaus.simple-tile
 ```
+
+## Floating, Scrolling and Omarchy's workspace modes
+
+Omarchy 4.5 gives each workspace a mode: tiling, scrolling or floating
+(**Super + L**). Omarchy saves it in
+`~/.local/state/omarchy/workspace-layouts/<workspace>.lua` and loads it at
+every login and config reload.
+
+- Choosing **Floating** or **Scrolling** in the popup sets that Omarchy mode
+  for the workspace, as Super + L would. Choosing a tiling preset, a window
+  limit or Native on such a workspace sets it back to tiling. Only that one
+  workspace's file is written (or removed, when the workspace returns to
+  Omarchy's default). The Omarchy bar and dock are refreshed. The first time
+  a workspace floats in a session, Hyprland reloads its config once so the
+  window titlebars appear, exactly as after Super + L.
+- A workspace **without a preset of its own** (or set to Native) shows the
+  mode Omarchy gives it: set one to floating or scrolling with Super + L and
+  the popup and the bar icon show Floating or Scrolling. Clicking that button
+  again tiles the workspace.
+- **At shell start**, presets set in this plugin win: a workspace with the
+  Floating or Scrolling preset gets that Omarchy mode, and a workspace with a
+  tiling preset or an App Preset is tiled again if Omarchy floats or scrolls
+  it. Workspaces without a preset of their own are left as Omarchy has them.
+- Floating and scrolling workspaces have no window limit and no automatic
+  overflow. Opening a window never changes a workspace's mode.
+
+On Omarchy before 4.5, Floating floats the workspace's windows itself and
+Scrolling uses Hyprland's scrolling layout; nothing is written outside the
+plugin's own settings.
 
 ## How overflow works
 

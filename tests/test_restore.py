@@ -8,6 +8,25 @@ from unittest.mock import patch
 import simple_tile as tile
 
 
+# Tests never touch this machine's Omarchy: no workspace modes unless a test
+# turns them on, and any state goes to a throwaway directory.
+_guards = []
+
+
+def setUpModule():
+    state = tempfile.TemporaryDirectory()
+    _guards.append(state)
+    for patcher in (patch.object(tile, "omarchy_modes_supported", return_value=False),
+                    patch.dict(os.environ, {"XDG_STATE_HOME": state.name})):
+        patcher.start()
+        _guards.append(patcher)
+
+
+def tearDownModule():
+    for guard in reversed(_guards):
+        (guard.stop if hasattr(guard, "stop") else guard.cleanup)()
+
+
 def window(address, cls='term', ws=2, **extra):
     return dict(address=address, **{'class': cls}, workspace={'id': ws}, mapped=True,
                 at=[0, 0], size=[800, 600], floating=False, **extra)

@@ -64,6 +64,10 @@ ShellUi.BarWidget {
         if (root.currentWsHasDefinedPreset) return 3
         return 2
     }
+    // Omarchy 4.5 workspace modes (Super + L): {"<ws>": "dwindle"|"scrolling"|"floating"},
+    // read by the helper at start, when the popup opens and on workspace changes.
+    property var omarchyModes: ({})
+    property bool omarchyModesSupported: false
     property int selectedWorkspace: 0
     property bool opened: false
     property bool popoutSwitchClosing: false
@@ -109,12 +113,37 @@ ShellUi.BarWidget {
             if (!root.tilingActive) {
                 root.updateSetting("active", true)
             }
+            root.syncOmarchyModes(true)
         })
+    }
+
+    onCurrentWsIdChanged: syncOmarchyModes(false)
+
+    // start: also line Omarchy's modes up with the presets set here (once per shell start).
+    property bool modesStartPending: false
+    property bool modesReadPending: false
+    function syncOmarchyModes(start) {
+        if (start) modesStartPending = true
+        else modesReadPending = true
+        modesDebounce.restart()
+    }
+    Timer {
+        id: modesDebounce
+        interval: 200
+        onTriggered: {
+            if (modesWorker.running || applyPresetWorker.running) { restart(); return }
+            var start = root.modesStartPending
+            root.modesStartPending = false
+            root.modesReadPending = false
+            modesWorker.command = ["python3", root.helperScriptPath(), "--sync-modes", start ? "start" : "read"]
+            modesWorker.running = true
+        }
     }
 
     onOpenedChanged: {
         if (!opened) { showSettingsView = false; showInfoView = false }
         if (opened) {
+            syncOmarchyModes(false)
             restoreConflict = null
             if (selectedWorkspace === 0 && root.currentWsId > 0) {
                 selectedWorkspace = root.currentWsId
@@ -201,11 +230,20 @@ ShellUi.BarWidget {
         return "side-by-side"
     }
 
+    // Floating or scrolling as Omarchy shows the workspace, else "".
+    function omarchyFreeMode(wsId) {
+        var mode = omarchyModes ? omarchyModes[String(wsId)] : undefined
+        return (mode === "floating" || mode === "scrolling") ? mode : ""
+    }
+
     function autoPresetForWorkspace(wsId) {
         if (isWorkspaceManual(wsId)) return ""
-        if (wsId > 0 && workspaceAutoPresets && workspaceAutoPresets[String(wsId)]) {
-            return workspaceAutoPresets[String(wsId)]
-        }
+        var own = (wsId > 0 && workspaceAutoPresets) ? workspaceAutoPresets[String(wsId)] : undefined
+        if (own && own !== "none") return own
+        // Without a preset of its own (or Native), a workspace shows the mode
+        // Omarchy gives it with Super + L.
+        if (omarchyFreeMode(wsId)) return omarchyFreeMode(wsId)
+        if (own) return own
         var capVal = effectiveCapFor(wsId)
         return defaultAutoPresetFor(capVal)
     }
@@ -216,6 +254,22 @@ ShellUi.BarWidget {
 
     function isWorkspaceFloating(wsId) {
         return wsId > 0 && autoPresetForWorkspace(wsId) === "floating"
+    }
+
+    function isWorkspaceScrolling(wsId) {
+        return wsId > 0 && autoPresetForWorkspace(wsId) === "scrolling"
+    }
+
+    // Floating and scrolling workspaces take any number of windows.
+    function isWorkspaceFree(wsId) {
+        return isWorkspaceFloating(wsId) || isWorkspaceScrolling(wsId)
+    }
+
+    // The workspace's floating or scrolling mode comes from Omarchy, not from a preset here.
+    function isModeFromOmarchy(wsId) {
+        if (isWorkspaceManual(wsId)) return false
+        var own = workspaceAutoPresets ? workspaceAutoPresets[String(wsId)] : undefined
+        return Boolean(omarchyFreeMode(wsId)) && (!own || own === "none")
     }
 
     function selectedWindowCap(wsId) {
@@ -231,6 +285,7 @@ ShellUi.BarWidget {
         if (preset === "grid") return root.t("grid")
         if (preset === "none") return root.t("noneNative")
         if (preset === "floating") return root.t("floating")
+        if (preset === "scrolling") return root.t("scrolling")
         return preset || root.t("default")
     }
 
@@ -242,6 +297,7 @@ ShellUi.BarWidget {
         if (preset === "columns") return "|||"
         if (preset === "grid") return "▦"
         if (preset === "floating") return "❐"
+        if (preset === "scrolling") return "⇆"
         return ""
     }
 
@@ -273,6 +329,7 @@ ShellUi.BarWidget {
             return
         }
 
+        root.expectOmarchyMode(wsId, preset)
         if (preset === "none") {
             applyPresetWorker.command = ["python3", root.helperScriptPath(), "--remove-preset", String(wsId)]
             lastMessage = root.t("wsNativeMsg", [wsId])
@@ -312,14 +369,25 @@ ShellUi.BarWidget {
         }
 
         var defaultPreset = defaultAutoPresetFor(effectiveCapFor(wsId))
+        root.expectOmarchyMode(wsId, defaultPreset)
         applyPresetWorker.command = ["python3", root.helperScriptPath(), "--apply-preset", String(wsId), defaultPreset]
         applyPresetWorker.running = true
         lastMessage = root.t("resetWsLayout", [wsId, autoPresetLabel(defaultPreset)])
     }
 
+    // A preset other than floating or scrolling tiles the workspace in Omarchy too.
+    function expectOmarchyMode(wsId, preset) {
+        if (!omarchyModesSupported) return
+        var modes = Object.assign({}, omarchyModes)
+        modes[String(wsId)] = (preset === "floating" || preset === "scrolling") ? preset : "dwindle"
+        omarchyModes = modes
+    }
+
     function toggleWorkspaceAutoPreset(wsId, preset) {
         if (wsId <= 0) return
-        if (!isWorkspaceManual(wsId) && hasCustomPreset(wsId) && workspaceAutoPresets[String(wsId)] === preset) {
+        var active = hasCustomPreset(wsId) ? workspaceAutoPresets[String(wsId)] === preset
+                                           : isModeFromOmarchy(wsId) && omarchyFreeMode(wsId) === preset
+        if (!isWorkspaceManual(wsId) && active) {
             removeWorkspaceAutoPreset(wsId)
         } else {
             setWorkspaceAutoPreset(wsId, preset)
@@ -513,7 +581,7 @@ ShellUi.BarWidget {
         current[String(wsId)] = newCap
         entry["workspaceCaps"] = current
 
-        var wasNative = isWorkspaceNative(wsId) || isWorkspaceFloating(wsId)
+        var wasNative = isWorkspaceNative(wsId) || isWorkspaceFree(wsId)
         if (wasNative) {
             var presets = Object.assign({}, workspaceAutoPresets)
             presets[String(wsId)] = defaultAutoPresetFor(newCap)
@@ -536,7 +604,14 @@ ShellUi.BarWidget {
             return
         }
 
-        if (wasManual || wasNative) {
+        // A limit tiles a floating or scrolling workspace again, in Omarchy too.
+        var wasFree = omarchyFreeMode(wsId) !== "" && !wasManual
+        if (wasFree) {
+            var tiling = defaultAutoPresetFor(newCap)
+            expectOmarchyMode(wsId, tiling)
+            applyPresetWorker.command = ["python3", root.helperScriptPath(), "--apply-preset", String(wsId), tiling]
+            applyPresetWorker.running = true
+        } else if (wasManual || wasNative) {
             var activePreset = autoPresetForWorkspace(wsId) || defaultAutoPresetFor(newCap)
             if (activePreset && activePreset !== "none" && newCap > 1) {
                 applyPresetWorker.command = ["python3", root.helperScriptPath(), "--apply-preset", String(wsId), activePreset]
@@ -847,6 +922,7 @@ ShellUi.BarWidget {
     Connections {
         target: Hyprland
         function onRawEvent(event) {
+            if (event.name === "configreloaded") { root.syncOmarchyModes(false); return }
             if (event.name !== "openwindow" || !root.tilingActive) return
             var address = event.data.split(",")[0]
             if (!/^(0x)?[0-9a-fA-F]+$/.test(address)) return
@@ -945,7 +1021,22 @@ ShellUi.BarWidget {
     }
 
     Process {
+        id: modesWorker
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    var res = JSON.parse(text)
+                    if (res.status !== "ok") return
+                    root.omarchyModesSupported = res.supported === true
+                    root.omarchyModes = res.modes || ({})
+                } catch (e) {}
+            }
+        }
+    }
+
+    Process {
         id: applyPresetWorker
+        onExited: root.syncOmarchyModes(false)
         stdout: StdioCollector {
             onStreamFinished: {
                 try {
@@ -1171,6 +1262,27 @@ ShellUi.BarWidget {
                             x: 5; y: 5; width: 9; height: 7; radius: 1.5
                             color: tileColor
                             opacity: 0.95
+                        }
+                    }
+
+                    // H. Scrolling (full-height columns, the last one running off the edge)
+                    Item {
+                        anchors.fill: parent
+                        visible: !isManual && currentPreset === "scrolling"
+                        Rectangle {
+                            x: 0; y: 0; width: 5; height: 12; radius: 1
+                            color: tileColor
+                            opacity: 0.95
+                        }
+                        Rectangle {
+                            x: 6.5; y: 0; width: 5; height: 12; radius: 1
+                            color: tileColor
+                            opacity: 0.6
+                        }
+                        Rectangle {
+                            x: 13; y: 0; width: 1.5; height: 12; radius: 0.75
+                            color: tileColor
+                            opacity: 0.35
                         }
                     }
 
@@ -1687,13 +1799,15 @@ ShellUi.BarWidget {
                                 return base + "\n" + summary
                             }
                             if (root.isWorkspaceNative(modelData)) return base + "\n" + root.t("nativeNoLimit")
-                            if (root.isWorkspaceFloating(modelData)) return base + "\n" + root.t("floatingNoLimit")
+                            if (root.isWorkspaceFree(modelData))
+                                return base + "\n" + root.t(root.isWorkspaceFloating(modelData) ? "floatingNoLimit" : "scrollingNoLimit")
+                                    + (root.isModeFromOmarchy(modelData) ? root.t("fromOmarchy") : "")
                             var presetKey = root.autoPresetForWorkspace(modelData)
                             var presetDesc = presetKey === "none" ? root.t("nativeNoPreset") : (root.autoPresetLabel(presetKey) + (root.hasCustomPreset(modelData) ? root.t("custom") : root.t("default2")))
                             return base + "\n" + root.t("limitPreset", [root.capForWorkspace(modelData), presetDesc])
                         }
                         onClicked: root.selectedWorkspace = modelData
-                        onRightClicked: root.showHint(root.t("wsCardTitle", [wsCard.modelData]), wsCard.isManual ? root.t("wsCardManual", [wsCard.modelData, root.savedLayoutSummary(wsCard.modelData)]) : root.isWorkspaceNative(wsCard.modelData) ? root.t("wsCardNative", [wsCard.modelData]) : root.isWorkspaceFloating(wsCard.modelData) ? root.t("floatingBody") : root.t("wsCardPresets", [wsCard.modelData, root.capForWorkspace(wsCard.modelData), root.autoPresetLabel(root.autoPresetForWorkspace(wsCard.modelData))]), root.t("tipLeftClickTo2"))
+                        onRightClicked: root.showHint(root.t("wsCardTitle", [wsCard.modelData]), wsCard.isManual ? root.t("wsCardManual", [wsCard.modelData, root.savedLayoutSummary(wsCard.modelData)]) : root.isWorkspaceNative(wsCard.modelData) ? root.t("wsCardNative", [wsCard.modelData]) : root.isWorkspaceFloating(wsCard.modelData) ? root.t("floatingBody") : root.isWorkspaceScrolling(wsCard.modelData) ? root.t("scrollingBody") : root.t("wsCardPresets", [wsCard.modelData, root.capForWorkspace(wsCard.modelData), root.autoPresetLabel(root.autoPresetForWorkspace(wsCard.modelData))]), root.t("tipLeftClickTo2"))
                         Accessible.name: root.t("workspaceN", [modelData])
 
                         Item {
@@ -1738,7 +1852,7 @@ ShellUi.BarWidget {
                                 Text {
                                     anchors.right: parent.right
                                     anchors.verticalCenter: parent.verticalCenter
-                                    text: wsCard.isManual ? root.t("appPreset") : (root.isWorkspaceNative(wsCard.modelData) ? root.t("noLimit") : root.isWorkspaceFloating(wsCard.modelData) ? root.t("floating") : root.t("maxN", [root.capForWorkspace(wsCard.modelData)]))
+                                    text: wsCard.isManual ? root.t("appPreset") : (root.isWorkspaceNative(wsCard.modelData) ? root.t("noLimit") : root.isWorkspaceFloating(wsCard.modelData) ? root.t("floating") : root.isWorkspaceScrolling(wsCard.modelData) ? root.t("scrolling") : root.t("maxN", [root.capForWorkspace(wsCard.modelData)]))
                                     color: (wsCard.isManual || root.hasCustomCap(wsCard.modelData)) ? Commons.Color.accent : Commons.Color.foreground
                                     font.family: Style.font.family
                                     font.pixelSize: wsCard.isManual ? Math.max(9, Style.font.caption - 2) : Style.font.caption
@@ -1850,7 +1964,7 @@ ShellUi.BarWidget {
                                         // Preset: 1 window
                                         Rectangle {
                                             anchors.fill: parent
-                                            visible: parent.capVal === 1 && parent.preset !== "none" && parent.preset !== "floating"
+                                            visible: parent.capVal === 1 && parent.preset !== "none" && parent.preset !== "floating" && parent.preset !== "scrolling"
                                             radius: 2
                                             color: Commons.Color.accentContainer || "#262b3d"
                                             border.width: 1
@@ -1863,7 +1977,7 @@ ShellUi.BarWidget {
                                         Row {
                                             anchors.fill: parent
                                             spacing: 2
-                                            visible: parent.capVal === 2 && parent.preset !== "stacked" && parent.preset !== "none" && parent.preset !== "floating"
+                                            visible: parent.capVal === 2 && parent.preset !== "stacked" && parent.preset !== "none" && parent.preset !== "floating" && parent.preset !== "scrolling"
                                             Rectangle {
                                                 width: (parent.width - 2) / 2
                                                 height: parent.height
@@ -2042,7 +2156,7 @@ ShellUi.BarWidget {
                                             anchors.fill: parent
                                             columns: 2
                                             spacing: 2
-                                            visible: parent.capVal === 4 && parent.preset !== "columns" && parent.preset !== "none" && parent.preset !== "floating"
+                                            visible: parent.capVal === 4 && parent.preset !== "columns" && parent.preset !== "none" && parent.preset !== "floating" && parent.preset !== "scrolling"
                                             Repeater {
                                                 model: 4
                                                 Rectangle {
@@ -2074,6 +2188,27 @@ ShellUi.BarWidget {
                                                     border.width: 1
                                                     border.color: Commons.Color.accent
                                                     opacity: 0.85
+                                                    Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Commons.Color.accent }
+                                                }
+                                            }
+                                        }
+
+                                        // Preset: Scrolling - full-height columns in a strip running past the edge
+                                        Item {
+                                            anchors.fill: parent
+                                            visible: parent.preset === "scrolling"
+                                            clip: true
+                                            Repeater {
+                                                model: 3
+                                                Rectangle {
+                                                    x: index * parent.width * 0.42
+                                                    width: parent.width * 0.38
+                                                    height: parent.height
+                                                    radius: 2
+                                                    color: Commons.Color.accentContainer || "#262b3d"
+                                                    border.width: 1
+                                                    border.color: Commons.Color.accent
+                                                    opacity: index === 2 ? 0.45 : 0.85
                                                     Rectangle { anchors.top: parent.top; width: parent.width; height: 2; color: Commons.Color.accent }
                                                 }
                                             }
@@ -2271,7 +2406,7 @@ ShellUi.BarWidget {
                             visible: root.effectiveCapFor(root.selectedWorkspace) === 1
                             width: parent.width
                             text: root.t("oneWindowTiling")
-                            selected: !root.isWorkspaceNative(root.selectedWorkspace) && !root.isWorkspaceFloating(root.selectedWorkspace)
+                            selected: !root.isWorkspaceNative(root.selectedWorkspace) && !root.isWorkspaceFree(root.selectedWorkspace)
                             bordered: true
                             focusable: true
                             onClicked: root.setWorkspaceAutoPreset(root.selectedWorkspace, "side-by-side")
@@ -2392,17 +2527,33 @@ ShellUi.BarWidget {
                             }
                         }
 
-                        // Floating: every window floats, no limit (any window limit).
-                        Ui.Button {
+                        // Floating and Scrolling: no window limit. With Omarchy 4.5 they are
+                        // the workspace's Omarchy mode (Super + L), so both stay in step.
+                        Row {
                             width: parent.width
-                            text: "❐  " + root.t("floating")
-                            selected: root.isWorkspaceFloating(root.selectedWorkspace)
-                            bordered: true
-                            focusable: true
-                            onClicked: root.toggleWorkspaceAutoPreset(root.selectedWorkspace, "floating")
-                            onRightClicked: root.showHint(root.t("floatingPreset"), root.t("floatingBody"), root.t("tipClickAgainTo"))
-                            tooltipText: root.t("floatingTip")
-                            Accessible.name: root.t("floatingPreset")
+                            spacing: Style.space(6)
+                            Ui.Button {
+                                width: (content.width - Style.space(6)) / 2
+                                text: "❐  " + root.t("floating")
+                                selected: root.isWorkspaceFloating(root.selectedWorkspace)
+                                bordered: true
+                                focusable: true
+                                onClicked: root.toggleWorkspaceAutoPreset(root.selectedWorkspace, "floating")
+                                onRightClicked: root.showHint(root.t("floatingPreset"), root.t("floatingBody"), root.t("tipClickAgainTo"))
+                                tooltipText: root.t("floatingTip") + (root.isModeFromOmarchy(root.selectedWorkspace) && root.isWorkspaceFloating(root.selectedWorkspace) ? root.t("fromOmarchy") : "")
+                                Accessible.name: root.t("floatingPreset")
+                            }
+                            Ui.Button {
+                                width: (content.width - Style.space(6)) / 2
+                                text: "⇆  " + root.t("scrolling")
+                                selected: root.isWorkspaceScrolling(root.selectedWorkspace)
+                                bordered: true
+                                focusable: true
+                                onClicked: root.toggleWorkspaceAutoPreset(root.selectedWorkspace, "scrolling")
+                                onRightClicked: root.showHint(root.t("scrollingPreset"), root.t("scrollingBody"), root.t("tipClickAgainTo"))
+                                tooltipText: root.t("scrollingTip") + (root.isModeFromOmarchy(root.selectedWorkspace) && root.isWorkspaceScrolling(root.selectedWorkspace) ? root.t("fromOmarchy") : "")
+                                Accessible.name: root.t("scrollingPreset")
+                            }
                         }
                     }
 

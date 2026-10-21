@@ -1,5 +1,13 @@
 # Release notes
 
+## 0.5.0 — 2026-10-21
+
+- New **Scrolling** preset beside **Floating**: windows line up as full-height columns on a strip that scrolls sideways; no window limit or automatic overflow. New bar icon, card preview and texts in all 8 languages.
+- **Omarchy 4.5 workspace modes** (Super + L): Floating and Scrolling now set the workspace's own Omarchy mode, saved by Omarchy in `~/.local/state/omarchy/workspace-layouts/<workspace>.lua`, so the Omarchy bar, dock, titlebars and Super + L agree with the popup. A tiling preset, a limit or Native tiles such a workspace again.
+- Workspaces without a preset of their own (or Native) show the mode set with Super + L; checked at start, when the popup opens, on workspace changes and after a config reload. At shell start, presets set in Workspace Presets win and Omarchy's modes are lined up with them.
+- Windows opening on a workspace Omarchy floats or scrolls are never moved on or tiled.
+- On Omarchy before 4.5, Floating works as before and Scrolling uses Hyprland's scrolling layout.
+
 ## 0.4.2 — 2026-10-20
 
 - Security (marketplace review of 0.4.1): **Save App Preset** no longer records a window's own `/proc/<pid>/cmdline` as its launch command, and restore never runs one saved by an older version. A sandboxed app could put a host program there, which Restore or the session autostart would then have run outside its sandbox. Missing apps start from their installed launcher; a window without one is reported as not restorable (new text in all 8 languages). The window class is no longer looked up on `PATH` either. A terminal's foreground command is still saved, but only from a terminal emulator installed under `/usr` in this session's own mount namespace, and restored only when it starts with that terminal.
