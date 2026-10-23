@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.6.0 — 2026-10-24
+
+- The Information page (ⓘ) reads the author's plugin list from the Omarchy Plugin Marketplace's catalog when it is shown, so newly published plugins appear without an update: known plugins keep their icon and translated description, new ones show the first sentence of their marketplace description in English. At most once an hour, cached in `~/.cache/ubruckhaus.simple-tile/`; offline the cached or built-in list is shown. This is the plugin's only network request (details in the README, *Information page*).
+
 ## 0.5.2 — 2026-10-21
 
 - Security (marketplace review of 0.5.1): a window that matched no installed launcher saved its class as the launcher name, and Restore joined that name onto the launcher folders, so an absolute or `../` class could reach a `.desktop` file outside them and `uwsm-app` or Gio would start it. A sandboxed app with a data folder the host can see could plant such a file. Now a launcher is only ever taken from the installed launchers themselves: a saved path must be one of them, a saved name must be one file name (no `/`, no leading dot) that one of them has, and an unmatched window saves no launcher name at all. Presets saved before keep working for apps with a real launcher; a window without one is reported as not restorable, as before.

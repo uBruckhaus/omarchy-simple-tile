@@ -1595,6 +1595,8 @@ ShellUi.BarWidget {
                     width: parent.width
                     separated: false
                     ownId: "ubruckhaus.simple-tile"
+                    // The list from the marketplace's catalog when the page shows (plugin_catalog.py).
+                    catalogScript: decodeURIComponent(Qt.resolvedUrl("plugin_catalog.py").toString().replace(/^file:\/\//, ""))
                     // The panel is narrow: one more line before an explanation is cut.
                     textLines: 4
                     nameLines: 2

@@ -39,7 +39,7 @@ The interface is built in in eight languages: English, German (Deutsch), French 
 
 The settings page opens from the gear and closes with **← Back**, Backspace or Esc. It also holds the **right-click help hints** and the **auto-move** switches. The long built-in user manual was removed from the popup; the [user manual](MANUAL.md) stays in the repository.
 
-The **ⓘ** button beside the gear opens an **Information** page with a card for each of the author's other plugins in the Omarchy Plugin Marketplace, with a short description in the panel's language. A click on a card opens that plugin's marketplace page in the browser (a fixed `https://plugins.omarchy.org/plugin.html?id=…` address); nothing is downloaded. **← Back**, Backspace or Esc returns.
+The **ⓘ** button beside the gear opens an **Information** page with a card for each of the author's other plugins in the Omarchy Plugin Marketplace, with a short description in the panel's language. A click on a card opens that plugin's marketplace page in the browser (a fixed `https://plugins.omarchy.org/plugin.html?id=…` address). The list comes from the marketplace's catalog, so newly published plugins of the author appear without a Workspace Presets update; a plugin this version does not know yet shows the first sentence of its marketplace description, in English (see *Information page* below). **← Back**, Backspace or Esc returns.
 
 ## Install
 
@@ -63,6 +63,12 @@ omarchy bar move ubruckhaus.simple-tile --section right
 omarchy plugin disable ubruckhaus.simple-tile
 omarchy plugin remove ubruckhaus.simple-tile
 ```
+
+The Information page's plugin list is cached in `~/.cache/ubruckhaus.simple-tile/`; delete that folder too if you like (it is only a cache).
+
+## Information page
+
+The plugin's only network request. Started only when the page is shown (a request in progress finishes even if you leave the page), `plugin_catalog.py` reads the marketplace's catalog `https://raw.githubusercontent.com/omacom/omarchy-plugin-marketplace/main/site/catalog.json` with `curl --proto =https --max-redirs 0` (at most 40 MiB and 40 s, and with the last `ETag`, so an unchanged catalog is not downloaded again), at most once an hour per panel, failed attempts included (kept on disk, and by the panel itself while the shell runs; two panels opened in the same moment may each ask once). Only the author's own entries (repositories under `github.com/ubruckhaus`, at most 60) are kept, as id, name, version, description text and the verified flag, with the time of the last check and the `ETag`, in `~/.cache/ubruckhaus.simple-tile/plugin-catalog.json` (the folder must be yours, not a link and closed to others — it is made `0700` if missing, otherwise nothing is read or written; file `0600`, written atomically inside that folder; read back only as a regular file of yours, at most 1 MiB). No workspace, window or preset data or other local data are sent; GitHub sees the usual request details (your public IP address, the fixed user agent and the `ETag`). Offline, the cached list or the built-in one is shown.
 
 ## Floating, Scrolling and Omarchy's workspace modes
 
