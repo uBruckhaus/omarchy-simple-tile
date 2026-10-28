@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.6.1 — 2026-10-28
+
+- The popup opens under its bar icon again on Omarchy 4.5.0rc2, which makes the bar window span the whole screen (it opened at the bottom right, 120 px high). Older Omarchy versions are unchanged.
+
 ## 0.6.0 — 2026-10-24
 
 - The Information page (ⓘ) reads the author's plugin list from the Omarchy Plugin Marketplace's catalog when it is shown, so newly published plugins appear without an update: known plugins keep their icon and translated description, new ones show the first sentence of their marketplace description in English. At most once an hour, cached in `~/.cache/ubruckhaus.simple-tile/`; offline the cached or built-in list is shown. This is the plugin's only network request (details in the README, *Information page*).
