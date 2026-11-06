@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.6.2 — 2026-11-06
+
+- The Information page (ⓘ) also lists the author's plugins kept in the author's GitHub organization (Maprisma Launcher in `github.com/maprisma`). A cached list from before is read again once.
+
 ## 0.6.1 — 2026-10-28
 
 - The popup opens under its bar icon again on Omarchy 4.5.0rc2, which makes the bar window span the whole screen (it opened at the bottom right, 120 px high). Older Omarchy versions are unchanged.
