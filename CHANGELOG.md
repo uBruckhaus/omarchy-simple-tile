@@ -2,7 +2,7 @@
 
 ## 0.6.2 — 2026-11-06
 
-- The Information page (ⓘ) also lists the author's plugins kept in the author's GitHub organization (Maprisma Launcher in `github.com/maprisma`). A cached list from before is read again once.
+- The Information page (ⓘ) also lists the author's plugins kept in the author's GitHub organization (Maprisma Launcher in `github.com/maprisma`). A cached list from before is read again once. The built-in list (shown offline) has a Maprisma Launcher card too.
 
 ## 0.6.1 — 2026-10-28
 
