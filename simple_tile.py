@@ -143,6 +143,87 @@ def plugin_entries(config):
                 yield entry
 
 
+MAX_SAVED = 16    # windows and apps per saved workspace; more is never read (shell.json can be edited)
+
+
+def capped_layout(layout):
+    """A saved workspace with at most MAX_SAVED windows and apps, each a dict."""
+    out = dict(layout)
+    for key in ("windows", "apps"):
+        items = layout.get(key)
+        out[key] = [i for i in items[:MAX_SAVED] if isinstance(i, dict)] if isinstance(items, list) else []
+    return out
+
+
+# --- autostart approval -------------------------------------------------------
+# shell.json can be edited by anything that can write it, so a saved app list
+# alone never starts apps at login: the user confirms it in the panel (saving
+# the App Preset or switching its autostart on), and the helper keeps a
+# fingerprint of that list in its own private file.
+
+def approvals_path():
+    state = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local/state")
+    return Path(state) / "ubruckhaus.simple-tile" / "autostart.json"
+
+
+def app_fingerprint(layout):
+    apps = layout.get("apps") if isinstance(layout.get("apps"), list) else []
+    keys = sorted((str(a.get("desktop_id", "")), str(a.get("desktop_path", ""))) for a in apps if isinstance(a, dict))
+    return hashlib.sha256(json.dumps(keys).encode()).hexdigest()
+
+
+def load_approvals():
+    path = approvals_path()
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    except OSError:
+        return {}
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_size > 65536:
+            return {}
+        data = json.loads(os.read(fd, 65537))
+    except (OSError, ValueError):
+        return {}
+    finally:
+        os.close(fd)
+    return {k: v for k, v in data.items() if isinstance(k, str) and k.isdigit() and isinstance(v, str)} \
+        if isinstance(data, dict) else {}
+
+
+def save_approvals(data):
+    path = approvals_path()
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    info = os.lstat(path.parent)
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
+        raise RuntimeError("unsafe state directory")
+    os.chmod(path.parent, 0o700)
+    fd, temp = tempfile.mkstemp(dir=path.parent, prefix=".autostart.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(data, stream)
+        os.replace(temp, path)
+    except BaseException:
+        Path(temp).unlink(missing_ok=True)
+        raise
+
+
+def approve_autostart(ws_id, on):
+    """The panel's confirmation: the workspace's current app list may start at
+    login (on), or no longer (off)."""
+    if type(ws_id) is not int or ws_id <= 0:
+        raise ValueError("invalid workspace id")
+    with runtime_lock():
+        approvals = load_approvals()
+        layout = read_settings().get("workspace_layouts", {}).get(ws_id)
+        if on and isinstance(layout, dict) and layout.get("autostart") is True:
+            approvals[str(ws_id)] = app_fingerprint(layout)
+        else:
+            approvals.pop(str(ws_id), None)
+        save_approvals(approvals)
+    return {"status": "ok", "workspace": ws_id, "approved": str(ws_id) in approvals}
+
+
 def read_settings():
     config = load_shell_config()
     for entry in plugin_entries(config):
@@ -169,7 +250,7 @@ def read_settings():
             for k, v in raw_layouts.items():
                 ws_id = int(k) if type(k) is int or (isinstance(k, str) and k.isdigit()) else None
                 if ws_id is not None and ws_id > 0 and isinstance(v, dict):
-                    workspace_layouts[ws_id] = v
+                    workspace_layouts[ws_id] = capped_layout(v)
         raw_auto_presets = entry.get("workspaceAutoPresets", {})
         workspace_auto_presets = {}
         if isinstance(raw_auto_presets, dict):
@@ -584,10 +665,10 @@ def capture_workspace(ws_id):
     return {
         "status": "ok",
         "workspace": ws_id,
-        "count": len(windows),
+        "count": min(len(windows), MAX_SAVED),
         "preset": preset,
-        "windows": windows,
-        "apps": apps
+        "windows": windows[:MAX_SAVED],
+        "apps": apps[:MAX_SAVED]
     }
 
 
@@ -1098,9 +1179,13 @@ def autostart_all(dry_run=False):
 
 
 def _autostart_all(dry_run):
-    started = []
+    started, unconfirmed = [], []
+    approvals = load_approvals()
     for ws_id, layout in sorted(read_settings().get("workspace_layouts", {}).items()):
         if layout.get("autostart") is True:
+            if approvals.get(str(ws_id)) != app_fingerprint(layout):
+                unconfirmed.append(ws_id)       # never confirmed in the panel (or changed since): not started
+                continue
             # The batch already owns the runtime lock.
             restore = restore_workspace if dry_run else _restore_workspace
             kwargs = {"dry_run": dry_run}
@@ -1108,7 +1193,8 @@ def _autostart_all(dry_run):
                 kwargs["conflict_action"] = "move"
             started.append({"workspace": ws_id, "result": restore(ws_id, **kwargs)})
     failures = sum(len(w["result"].get("failed", [])) for w in started)
-    return {"status": "partial" if failures else "ok", "workspaces": started, "failed_count": failures}
+    return {"status": "partial" if failures else "ok", "workspaces": started, "failed_count": failures,
+            "unconfirmed": unconfirmed}
 
 
 # Omarchy 4.5 gives every workspace a mode (Super + L): dwindle, scrolling or
@@ -1752,6 +1838,8 @@ def main(argv=None):
     parser.add_argument("--conflict-action", choices=["ask", "move", "close", "keep"], default="ask",
                         help="action to take if extra windows are found on workspace when restoring")
     parser.add_argument("--autostart", action="store_true", help="launch saved apps for all autostart workspaces")
+    parser.add_argument("--approve-autostart", nargs=2, metavar=("WS_ID", "ON"),
+                        help="confirm (1) or withdraw (0) a workspace's autostart, as set in the panel")
     parser.add_argument("--apply-preset", nargs=2, metavar=("WS_ID", "PRESET"), help="apply layout preset to workspace")
     parser.add_argument("--remove-preset", type=int, metavar="WS_ID", help="remove layout preset from workspace")
     parser.add_argument("--remove-all-presets", action="store_true", help="remove layout presets from all workspaces (native layout)")
@@ -1774,6 +1862,12 @@ def main(argv=None):
             return 0
         if args.autostart:
             print(json.dumps(autostart_all(args.dry_run)))
+            return 0
+        if args.approve_autostart:
+            ws_text, on = args.approve_autostart
+            if not ws_text.isdigit() or on not in ("0", "1"):
+                raise ValueError("invalid approval")
+            print(json.dumps(approve_autostart(int(ws_text), on == "1")))
             return 0
         if args.remove_preset is not None:
             print(json.dumps(apply_layout_preset(args.remove_preset, "none", args.dry_run)))

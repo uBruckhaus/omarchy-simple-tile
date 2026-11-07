@@ -45,9 +45,10 @@ The **ⓘ** button beside the gear opens an **Information** page with a card for
 
 Requires **Omarchy with the Quickshell plugin system**, Python 3.10+, and
 **Hyprland 0.56.2 with its Lua dispatch API**. Older Waybar-based Omarchy
-installations are not supported. This is an early `0.2.8` release.
-App launching uses saved argument lists or `uwsm-app` for desktop files;
-PyGObject/GioUnix is an optional fallback. No pip installation is required.
+installations are not supported.
+Apps are started only from their installed launcher (`uwsm-app` with the `.desktop`
+file; PyGObject/GioUnix as an optional fallback); a saved command line is never run.
+No pip installation is required.
 
 ```sh
 omarchy plugin add https://github.com/uBruckhaus/omarchy-simple-tile.git
@@ -148,7 +149,7 @@ Workspace Presets supports two modes for your workspaces:
   - **Restore / Launch Apps:** Click **Restore App Preset** to launch missing apps, place them on the saved workspace, and rebuild the saved tile positions and proportions using native dwindle tiles. Floating windows regain their saved position and size. Each saved window has its own app launch information, including multiple windows of one app.
   - Existing windows are matched by app class and, where possible, title. A uniquely matching app on another workspace can be moved back unless it belongs to another saved layout. Apps that cannot open another window report a timeout.
   - Restoration supports ungrouped, non-fullscreen rectangular tiling arrangements. The restore dialog lets you move, close, or float conflicting windows before restoring. App content (documents, terminal commands, browser tabs) is not restored. Changed monitor geometry and gaps can affect exact pixel sizes.
-  - **Autostart:** Optionally flag the workspace to automatically restore its saved windows once per Hyprland session. Multiple bars and shell reloads do not duplicate startup launches; failed restores can be retried with Restore.
+  - **Autostart:** Optionally flag the workspace to automatically restore its saved windows once per Hyprland session. Multiple bars and shell reloads do not duplicate startup launches; failed restores can be retried with Restore. Since 0.7.0 autostart only starts an app list you confirmed in the panel (saving the App Preset or switching its autostart on): the helper keeps a fingerprint of that list in `~/.local/state/ubruckhaus.simple-tile/autostart.json` (private), so a `shell.json` entry edited elsewhere never starts apps at login. Autostart workspaces saved before 0.7.0 need that confirmation once; the panel says so.
   - Workspaces using App Presets are never disrupted by automatic overflow moves.
 
 ## Settings

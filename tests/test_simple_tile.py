@@ -482,7 +482,9 @@ class AppLaunchTests(unittest.TestCase):
                 3: {"autostart": True, "apps": [{"name": "App3", "class": "app3"}]},
             }
         }
+        approved = {str(ws): tile.app_fingerprint(settings["workspace_layouts"][ws]) for ws in (2, 3)}
         with patch.object(tile, "read_settings", return_value=settings), \
+                patch.object(tile, "load_approvals", return_value=approved), \
                 patch.object(tile, "restore_workspace", return_value={"status": "ok"}) as restore:
             res = tile.autostart_all(dry_run=True)
             self.assertEqual(res["status"], "ok")
@@ -1086,6 +1088,50 @@ class HostileInputTests(unittest.TestCase):
             os.mkfifo(fifo)
             with self.assertRaises(ValueError):
                 tile.load_shell_config(fifo)                     # refused, never blocks
+
+
+class AutostartApprovalTests(unittest.TestCase):
+    """0.7.0 release review (High): a saved app list in shell.json alone never starts apps at login."""
+
+    def setUp(self):
+        import tempfile
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        env = patch.dict(tile.os.environ, {"XDG_STATE_HOME": self.tmp.name})
+        env.start()
+        self.addCleanup(env.stop)
+        lock = patch.object(tile, "runtime_lock")
+        lock.start()
+        self.addCleanup(lock.stop)
+        self.layout = {"autostart": True, "apps": [{"desktop_id": "foot", "desktop_path": "/usr/share/applications/foot.desktop"}]}
+
+    def run_autostart(self, layouts):
+        restored = []
+        with patch.object(tile, "read_settings", return_value={"workspace_layouts": layouts}), \
+                patch.object(tile, "_restore_workspace", side_effect=lambda ws, **k: restored.append(ws) or {"failed": []}):
+            result = tile._autostart_all(False)
+        return restored, result
+
+    def test_only_a_confirmed_unchanged_list_starts(self):
+        restored, result = self.run_autostart({2: self.layout})
+        self.assertEqual((restored, result["unconfirmed"]), ([], [2]))          # forged or never confirmed
+        with patch.object(tile, "read_settings", return_value={"workspace_layouts": {2: self.layout}}):
+            self.assertTrue(tile.approve_autostart(2, True)["approved"])
+        restored, result = self.run_autostart({2: self.layout})
+        self.assertEqual((restored, result["unconfirmed"]), ([2], []))
+        changed = dict(self.layout, apps=self.layout["apps"] + [{"desktop_id": "evil", "desktop_path": "/x/evil.desktop"}])
+        restored, result = self.run_autostart({2: changed})
+        self.assertEqual((restored, result["unconfirmed"]), ([], [2]))          # edited since: not started
+        with patch.object(tile, "read_settings", return_value={"workspace_layouts": {2: self.layout}}):
+            self.assertFalse(tile.approve_autostart(2, False)["approved"])
+        self.assertEqual(self.run_autostart({2: self.layout})[0], [])
+        mode = os.stat(tile.approvals_path()).st_mode & 0o777
+        self.assertEqual(mode & 0o077, 0)                                       # private file
+
+    def test_saved_lists_are_capped(self):
+        layout = {"windows": [{"at": [0, 0]}] * 40 + ["x"], "apps": "nope"}
+        capped = tile.capped_layout(layout)
+        self.assertEqual((len(capped["windows"]), capped["apps"]), (tile.MAX_SAVED, []))
 
 if __name__ == "__main__":
     unittest.main()

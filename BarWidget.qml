@@ -19,7 +19,24 @@ ShellUi.BarWidget {
     readonly property int cap: Math.max(1, Math.min(4, Number(setting("maxWindows", 2)) || 2))
     readonly property var workspaceCaps: setting("workspaceCaps", {}) || ({})
     readonly property var workspaceModes: setting("workspaceModes", {}) || ({})
-    readonly property var workspaceLayouts: setting("workspaceLayouts", {}) || ({})
+    // At most 16 saved windows and apps per workspace are ever read (shell.json can be edited;
+    // the helper applies the same cap), and only objects.
+    readonly property var workspaceLayouts: capLayouts(setting("workspaceLayouts", {}))
+    function capLayouts(raw) {
+        var out = {}
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out
+        Object.keys(raw).slice(0, 64).forEach(function(k) {
+            var l = raw[k]
+            if (!l || typeof l !== "object" || Array.isArray(l)) return
+            var copy = Object.assign({}, l)
+            ;["windows", "apps"].forEach(function(key) {
+                copy[key] = Array.isArray(l[key])
+                    ? l[key].slice(0, 16).filter(function(i) { return i && typeof i === "object" }) : []
+            })
+            out[k] = copy
+        })
+        return out
+    }
     readonly property var workspaceAutoPresets: setting("workspaceAutoPresets", {}) || ({})
     readonly property var defaultAutoPresets: setting("defaultAutoPresets", {}) || ({ "2": "side-by-side", "3": "master-left", "4": "grid" })
     readonly property int currentWsId: (Hyprland.focusedWorkspace && Hyprland.focusedWorkspace.id > 0) ? Hyprland.focusedWorkspace.id : 1
@@ -530,18 +547,10 @@ ShellUi.BarWidget {
         if (!iconName || typeof iconName !== "string") {
             return Quickshell.iconPath("application-x-executable", true)
         }
-        // A saved icon comes from shell.json: never a URL, and a file only from the usual
-        // icon folders (Omarchy web apps keep theirs in ~/.local/share/applications/icons).
-        if (iconName.indexOf("://") >= 0 || iconName.length > 512)
+        // A saved icon comes from shell.json: only an icon-theme name is ever looked up,
+        // never a file path or a URL (no file is opened or decoded from saved data).
+        if (iconName.indexOf("/") >= 0 || iconName.indexOf(":") >= 0 || iconName.length > 128)
             return Quickshell.iconPath("application-x-executable", true)
-        if (iconName.charAt(0) === "/") {
-            var home = Quickshell.env("HOME") || ""
-            var dirs = ["/usr/share/icons/", "/usr/share/pixmaps/", home + "/.local/share/applications/icons/",
-                        home + "/.local/share/icons/"]
-            var inside = home.length > 1 && dirs.some(function(d) { return iconName.indexOf(d) === 0 })
-            var clean = iconName.indexOf("/../") < 0 && iconName.indexOf("/./") < 0 && iconName.indexOf("//") < 0
-            return inside && clean ? "file://" + iconName : Quickshell.iconPath("application-x-executable", true)
-        }
         if (bar && bar.shell && bar.shell.appLibrary) {
             var src = bar.shell.appLibrary.iconSource(iconName)
             if (src && src.length > 0) return src
@@ -688,6 +697,28 @@ ShellUi.BarWidget {
         layout.autostart = !workspaceAutostart(wsId)
         layouts[String(wsId)] = layout
         updateSetting("workspaceLayouts", layouts)
+        approveAutostartSoon(wsId, layout.autostart)
+    }
+
+    // Autostart only starts an app list the user confirmed here: the helper keeps a
+    // fingerprint of it outside shell.json (asked a moment after the save lands).
+    property var pendingApprovals: ({})
+    function approveAutostartSoon(wsId, on) {
+        var next = Object.assign({}, pendingApprovals)
+        next[String(wsId)] = on === true
+        pendingApprovals = next
+        approvalTimer.restart()
+    }
+    Timer {
+        id: approvalTimer
+        interval: 1000
+        onTriggered: {
+            var pending = root.pendingApprovals
+            root.pendingApprovals = ({})
+            Object.keys(pending).forEach(function(ws) {
+                root.runHelper("approve-" + ws, ["--approve-autostart", ws, pending[ws] ? "1" : "0"])
+            })
+        }
     }
 
     function clearWorkspaceLayout(wsId) {
@@ -875,6 +906,7 @@ ShellUi.BarWidget {
         if (saveSettingsEntry(entry)) {
             settings = entry
             root.dropHelperJobs(String(wsId))      // a waiting layout would rearrange the saved App Preset
+            root.approveAutostartSoon(wsId, autostart === true)   // saved here by the user: confirmed
             failed = false
             lastMessage = root.t("savedAppPresetFor", [wsId, res.count || 0])
             activeWorkspaceTab = "manual"
@@ -1174,6 +1206,8 @@ ShellUi.BarWidget {
                     if (res.failed_count > 0) {
                         root.failed = true
                         root.lastMessage = root.t("someSavedWindowsCould")
+                    } else if (res.unconfirmed && res.unconfirmed.length > 0) {
+                        root.lastMessage = root.t("autostartUnconfirmed", [res.unconfirmed.join(", ")])
                     }
                 } catch (e) {}
             }
