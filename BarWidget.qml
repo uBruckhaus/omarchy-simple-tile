@@ -692,12 +692,12 @@ ShellUi.BarWidget {
     }
 
     function toggleWorkspaceAutostart(wsId) {
+        if (!hasSavedLayout(wsId)) return        // only once the saved apps are on screen
         var layouts = Object.assign({}, workspaceLayouts)
         var layout = Object.assign({}, layouts[String(wsId)] || {})
         layout.autostart = !workspaceAutostart(wsId)
         layouts[String(wsId)] = layout
-        updateSetting("workspaceLayouts", layouts)
-        approveAutostartSoon(wsId, layout.autostart, layout)
+        updateSetting("workspaceLayouts", layouts)      // saveSettingsEntry keeps or forgets the copy
     }
 
     // Autostart only starts an app list the user confirmed here: the helper keeps a
@@ -793,7 +793,29 @@ ShellUi.BarWidget {
             unchanged = JSON.stringify(existing[key]) === JSON.stringify(entry[key])
         }
         if (unchanged) return true
-        return bar.shell.updateEntryInline(moduleName, entry)
+        var saved = bar.shell.updateEntryInline(moduleName, entry)
+        if (saved) autostartFollows(existing.workspaceLayouts, entry.workspaceLayouts)
+        return saved
+    }
+
+    // Every change made here keeps autostart's private copy in step with what the panel
+    // shows: a workspace with autostart on whose apps, windows or "Save apps" change (or
+    // whose autostart is switched on) gets the new layout as its copy; switched off or
+    // removed, the copy is forgotten. (The helper never reads shell.json for autostart.)
+    function autostartFollows(beforeRaw, afterRaw) {
+        var before = capLayouts(beforeRaw), after = capLayouts(afterRaw)
+        var keys = Object.keys(before).concat(Object.keys(after)).filter(function(k, i, all) {
+            return all.indexOf(k) === i && /^[0-9]+$/.test(k)
+        })
+        keys.forEach(function(k) {
+            var oldL = before[k], newL = after[k]
+            var onBefore = !!oldL && oldL.autostart === true, onAfter = !!newL && newL.autostart === true
+            var changed = onAfter && (!oldL || ["apps", "windows", "saveApps"].some(function(f) {
+                return JSON.stringify(oldL[f]) !== JSON.stringify(newL[f])
+            }))
+            if (onAfter && (!onBefore || changed)) approveAutostartSoon(parseInt(k), true, newL)
+            else if (onBefore && !onAfter) approveAutostartSoon(parseInt(k), false, null)
+        })
     }
 
     function clearAllPresets() {
@@ -893,7 +915,7 @@ ShellUi.BarWidget {
         var layouts = Object.assign({}, workspaceLayouts)
         var existing = layouts[String(wsId)] || {}
         var saveApps = existing.saveApps !== undefined ? existing.saveApps : true
-        var autostart = existing.autostart === true      // new App Presets: off until switched on (after seeing the apps)
+        var autostart = false      // every new capture: off until switched on after seeing its apps
         layouts[String(wsId)] = {
             mode: "manual",
             saveApps: saveApps,
@@ -911,7 +933,6 @@ ShellUi.BarWidget {
         if (saveSettingsEntry(entry)) {
             settings = entry
             root.dropHelperJobs(String(wsId))      // a waiting layout would rearrange the saved App Preset
-            root.approveAutostartSoon(wsId, autostart === true, layouts[String(wsId)])   // saved here by the user: confirmed
             failed = false
             lastMessage = root.t("savedAppPresetFor", [wsId, res.count || 0])
             activeWorkspaceTab = "manual"
@@ -3196,6 +3217,7 @@ ShellUi.BarWidget {
                             label: root.t("autostartOnSessionStartup")
                             description: root.t("automaticallyLaunchSavedApps")
                             checked: root.workspaceAutostart(root.selectedWorkspace)
+                            enabled: root.hasSavedLayout(root.selectedWorkspace)
                             onClicked: root.toggleWorkspaceAutostart(root.selectedWorkspace)
 
                             MouseArea {

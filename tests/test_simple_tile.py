@@ -476,6 +476,7 @@ class AppLaunchTests(unittest.TestCase):
 
     def test_autostart_all_triggers_enabled_workspaces(self):
         settings = {
+            "workspace_modes": {1: "manual", 2: "manual", 3: "manual"},
             "workspace_layouts": {
                 1: {"autostart": False, "apps": []},
                 2: {"autostart": True, "apps": [{"name": "App2", "class": "app2"}]},
@@ -1109,7 +1110,8 @@ class AutostartSnapshotTests(unittest.TestCase):
 
     def run_autostart(self, layouts):
         restored = []
-        with patch.object(tile, "read_settings", return_value={"workspace_layouts": layouts}), \
+        modes = {ws: "manual" for ws in layouts}
+        with patch.object(tile, "read_settings", return_value={"workspace_layouts": layouts, "workspace_modes": modes}), \
                 patch.object(tile, "send_notification") as notify, \
                 patch.object(tile, "_restore_workspace",
                              side_effect=lambda ws, **k: restored.append((ws, k.get("layout"))) or {"failed": []}):
@@ -1128,6 +1130,16 @@ class AutostartSnapshotTests(unittest.TestCase):
         self.assertEqual(self.run_autostart({2: dict(self.shown, autostart=False)})[0], [])
         self.assertFalse(tile.approve_autostart(2, False)["approved"])
         self.assertEqual(self.run_autostart({2: self.shown})[0], [])
+
+    def test_an_app_preset_no_longer_in_use_does_not_start(self):
+        tile.approve_autostart(2, True, self.shown)
+        restored = []
+        with patch.object(tile, "read_settings", return_value={"workspace_layouts": {2: self.shown},
+                                                                "workspace_modes": {2: "auto"}}), \
+                patch.object(tile, "send_notification"), \
+                patch.object(tile, "_restore_workspace", side_effect=lambda ws, **k: restored.append(ws) or {"failed": []}):
+            tile._autostart_all(False)
+        self.assertEqual(restored, [])
 
     def test_the_copy_file_is_private(self):
         tile.approve_autostart(2, True, self.shown)

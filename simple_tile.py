@@ -1000,8 +1000,11 @@ def _restore_workspace(ws_id, dry_run=False, conflict_action="ask", layout=None)
         raise ValueError("invalid workspace id")
     if conflict_action not in ("ask", "move", "close", "keep"):
         raise ValueError("invalid conflict action: %s" % conflict_action)
+    # Every saved layout (to know which windows elsewhere belong to another App Preset);
+    # the one restored is the store's (a click) or autostart's confirmed copy.
+    layouts = read_settings().get("workspace_layouts", {})
     if layout is None:
-        layout = read_settings().get("workspace_layouts", {}).get(ws_id)
+        layout = layouts.get(ws_id)
     if not layout:
         return {"status": "no_layout", "workspace": ws_id}
     apps = layout.get("apps", [])
@@ -1201,8 +1204,11 @@ def autostart_all(dry_run=False):
 def _autostart_all(dry_run):
     started, unconfirmed = [], []
     snapshots = load_snapshots()
-    for ws_id, layout in sorted(read_settings().get("workspace_layouts", {}).items()):
-        if layout.get("autostart") is True:
+    settings = read_settings()
+    modes = settings.get("workspace_modes", {})
+    for ws_id, layout in sorted(settings.get("workspace_layouts", {}).items()):
+        # Only an App Preset in use starts (one the workspace left stays saved but quiet).
+        if layout.get("autostart") is True and modes.get(ws_id) == "manual":
             snapshot = snapshots.get(str(ws_id))
             if snapshot is None:
                 unconfirmed.append(ws_id)       # never confirmed in the panel: not started
