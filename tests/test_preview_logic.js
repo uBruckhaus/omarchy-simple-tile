@@ -142,3 +142,9 @@ test('minus: one fewer, then the default limit', () => {
     assert.equal(g.maxWindows, undefined);
     assert.equal(L.removedCap({maxWindows: 2, workspaceAutoPresets: {'3': 'none'}}, 3), null);
 });
+
+test('saved windows are capped and only objects', () => {
+    const many = Array.from({length: 40}, (_, i) => ({class: 'w' + i, at: [0, 0], size: [10, 10]}))
+    const e = {workspaceLayouts: {'2': {windows: [7, null, ...many]}}}
+    assert.equal(L.savedWindows(e, 2).length, 14)       // 16 read, 2 of them not objects
+})

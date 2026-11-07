@@ -166,10 +166,41 @@ def approvals_path():
     return Path(state) / "ubruckhaus.simple-tile" / "autostart.json"
 
 
+def _launcher_pair(record):
+    if not isinstance(record, dict):
+        return None
+    ident, path = record.get("desktop_id"), record.get("desktop_path")
+    return (ident if isinstance(ident, str) else "", path if isinstance(path, str) else "")
+
+
+def launcher_keys(layout):
+    """Every launcher a restore of this layout can start from: the app list,
+    each saved window and the app record inside it, as sorted unique pairs."""
+    records = []
+    for key in ("apps", "windows"):
+        items = layout.get(key) if isinstance(layout.get(key), list) else []
+        for item in items:
+            records.append(item)
+            if isinstance(item, dict):
+                records.append(item.get("app"))
+    return sorted({pair for pair in map(_launcher_pair, records) if pair and pair != ("", "")})
+
+
+def canonical_keys(value):
+    """A launcher list as the panel sent it, in the same canonical form, or None."""
+    if not isinstance(value, list) or len(value) > 3 * MAX_SAVED:
+        return None
+    pairs = set()
+    for item in value:
+        if not (isinstance(item, list) and len(item) == 2 and all(isinstance(v, str) and len(v) <= 4096 for v in item)):
+            return None
+        if tuple(item) != ("", ""):
+            pairs.add(tuple(item))
+    return sorted(pairs)
+
+
 def app_fingerprint(layout):
-    apps = layout.get("apps") if isinstance(layout.get("apps"), list) else []
-    keys = sorted((str(a.get("desktop_id", "")), str(a.get("desktop_path", ""))) for a in apps if isinstance(a, dict))
-    return hashlib.sha256(json.dumps(keys).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(launcher_keys(layout)).encode()).hexdigest()
 
 
 def load_approvals():
@@ -208,18 +239,21 @@ def save_approvals(data):
         raise
 
 
-def approve_autostart(ws_id, on):
-    """The panel's confirmation: the workspace's current app list may start at
-    login (on), or no longer (off)."""
+def approve_autostart(ws_id, on, confirmed=None):
+    """The panel's confirmation: the launchers the user saw (`confirmed`, the
+    panel's own snapshot) may start at login, but only while the saved entry
+    still holds exactly those (on); or no longer (off)."""
     if type(ws_id) is not int or ws_id <= 0:
         raise ValueError("invalid workspace id")
     with runtime_lock():
         approvals = load_approvals()
         layout = read_settings().get("workspace_layouts", {}).get(ws_id)
-        if on and isinstance(layout, dict) and layout.get("autostart") is True:
+        expected = canonical_keys(confirmed)
+        if on and isinstance(layout, dict) and layout.get("autostart") is True and expected is not None \
+                and expected == launcher_keys(layout):
             approvals[str(ws_id)] = app_fingerprint(layout)
         else:
-            approvals.pop(str(ws_id), None)
+            approvals.pop(str(ws_id), None)       # off, or changed since the user's action: not approved
         save_approvals(approvals)
     return {"status": "ok", "workspace": ws_id, "approved": str(ws_id) in approvals}
 
@@ -1193,6 +1227,9 @@ def _autostart_all(dry_run):
                 kwargs["conflict_action"] = "move"
             started.append({"workspace": ws_id, "result": restore(ws_id, **kwargs)})
     failures = sum(len(w["result"].get("failed", [])) for w in started)
+    if unconfirmed and not dry_run:
+        send_notification("Workspace Presets", "Autostart skipped for workspace %s: switch its autostart off and on once "
+                                    "in App Presets to confirm the saved apps." % ", ".join(map(str, unconfirmed)))
     return {"status": "partial" if failures else "ok", "workspaces": started, "failed_count": failures,
             "unconfirmed": unconfirmed}
 
@@ -1838,8 +1875,9 @@ def main(argv=None):
     parser.add_argument("--conflict-action", choices=["ask", "move", "close", "keep"], default="ask",
                         help="action to take if extra windows are found on workspace when restoring")
     parser.add_argument("--autostart", action="store_true", help="launch saved apps for all autostart workspaces")
-    parser.add_argument("--approve-autostart", nargs=2, metavar=("WS_ID", "ON"),
-                        help="confirm (1) or withdraw (0) a workspace's autostart, as set in the panel")
+    parser.add_argument("--approve-autostart", nargs="+", metavar="ARG",
+                        help="WS_ID 1 LAUNCHERS_JSON confirms a workspace's autostart for the launchers the panel "
+                             "showed; WS_ID 0 withdraws it")
     parser.add_argument("--apply-preset", nargs=2, metavar=("WS_ID", "PRESET"), help="apply layout preset to workspace")
     parser.add_argument("--remove-preset", type=int, metavar="WS_ID", help="remove layout preset from workspace")
     parser.add_argument("--remove-all-presets", action="store_true", help="remove layout presets from all workspaces (native layout)")
@@ -1864,10 +1902,12 @@ def main(argv=None):
             print(json.dumps(autostart_all(args.dry_run)))
             return 0
         if args.approve_autostart:
-            ws_text, on = args.approve_autostart
-            if not ws_text.isdigit() or on not in ("0", "1"):
+            values = args.approve_autostart
+            if len(values) not in (2, 3) or not values[0].isdigit() or values[1] not in ("0", "1") \
+                    or (len(values) == 3 and len(values[2]) > 65536):
                 raise ValueError("invalid approval")
-            print(json.dumps(approve_autostart(int(ws_text), on == "1")))
+            confirmed = json.loads(values[2]) if len(values) == 3 else None
+            print(json.dumps(approve_autostart(int(values[0]), values[1] == "1", confirmed)))
             return 0
         if args.remove_preset is not None:
             print(json.dumps(apply_layout_preset(args.remove_preset, "none", args.dry_run)))

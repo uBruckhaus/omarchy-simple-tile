@@ -62,9 +62,13 @@ function isManual(entry, ws) {
     return Boolean(layout && layout.mode === "manual")
 }
 
+var MAX_SAVED = 16      // as the helper: no more saved windows are ever read (shell.json can be edited)
+
 function savedWindows(entry, ws) {
     var layout = layoutFor(entry, ws)
-    return layout && Array.isArray(layout.windows) ? layout.windows.slice() : []
+    return layout && Array.isArray(layout.windows)
+        ? layout.windows.slice(0, MAX_SAVED).filter(function(w) { return w && typeof w === "object" && !Array.isArray(w) })
+        : []
 }
 
 function effectiveCap(entry, ws) {

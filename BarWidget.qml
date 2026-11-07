@@ -697,15 +697,33 @@ ShellUi.BarWidget {
         layout.autostart = !workspaceAutostart(wsId)
         layouts[String(wsId)] = layout
         updateSetting("workspaceLayouts", layouts)
-        approveAutostartSoon(wsId, layout.autostart)
+        approveAutostartSoon(wsId, layout.autostart, layout)
     }
 
     // Autostart only starts an app list the user confirmed here: the helper keeps a
     // fingerprint of it outside shell.json (asked a moment after the save lands).
     property var pendingApprovals: ({})
-    function approveAutostartSoon(wsId, on) {
+    // The launchers the user is confirming, from the layout the panel itself just saved
+    // (the helper approves only while the saved entry still holds exactly these).
+    function launcherKeys(layout) {
+        var pairs = []
+        function add(r) {
+            if (!r || typeof r !== "object") return
+            var id = typeof r.desktop_id === "string" ? r.desktop_id : ""
+            var path = typeof r.desktop_path === "string" ? r.desktop_path : ""
+            if (id || path) pairs.push([id, path])
+        }
+        ;["apps", "windows"].forEach(function(key) {
+            (Array.isArray(layout && layout[key]) ? layout[key] : []).forEach(function(item) {
+                add(item)
+                if (item && typeof item === "object") add(item.app)
+            })
+        })
+        return pairs
+    }
+    function approveAutostartSoon(wsId, on, layout) {
         var next = Object.assign({}, pendingApprovals)
-        next[String(wsId)] = on === true
+        next[String(wsId)] = on === true ? JSON.stringify(launcherKeys(layout)) : ""
         pendingApprovals = next
         approvalTimer.restart()
     }
@@ -716,7 +734,9 @@ ShellUi.BarWidget {
             var pending = root.pendingApprovals
             root.pendingApprovals = ({})
             Object.keys(pending).forEach(function(ws) {
-                root.runHelper("approve-" + ws, ["--approve-autostart", ws, pending[ws] ? "1" : "0"])
+                var keys = pending[ws]
+                root.runHelper("approve-" + ws, keys && keys.length <= 65536
+                    ? ["--approve-autostart", ws, "1", keys] : ["--approve-autostart", ws, "0"])
             })
         }
     }
@@ -906,7 +926,7 @@ ShellUi.BarWidget {
         if (saveSettingsEntry(entry)) {
             settings = entry
             root.dropHelperJobs(String(wsId))      // a waiting layout would rearrange the saved App Preset
-            root.approveAutostartSoon(wsId, autostart === true)   // saved here by the user: confirmed
+            root.approveAutostartSoon(wsId, autostart === true, layouts[String(wsId)])   // saved here by the user: confirmed
             failed = false
             lastMessage = root.t("savedAppPresetFor", [wsId, res.count || 0])
             activeWorkspaceTab = "manual"

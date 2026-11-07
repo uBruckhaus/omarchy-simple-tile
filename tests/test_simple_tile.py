@@ -1115,10 +1115,15 @@ class AutostartApprovalTests(unittest.TestCase):
     def test_only_a_confirmed_unchanged_list_starts(self):
         restored, result = self.run_autostart({2: self.layout})
         self.assertEqual((restored, result["unconfirmed"]), ([], [2]))          # forged or never confirmed
+        seen = [list(pair) for pair in tile.launcher_keys(self.layout)]          # what the panel showed
         with patch.object(tile, "read_settings", return_value={"workspace_layouts": {2: self.layout}}):
-            self.assertTrue(tile.approve_autostart(2, True)["approved"])
+            self.assertFalse(tile.approve_autostart(2, True)["approved"])        # no snapshot: never
+            self.assertFalse(tile.approve_autostart(2, True, [["evil", ""]])["approved"])   # changed since
+            self.assertTrue(tile.approve_autostart(2, True, seen)["approved"])
         restored, result = self.run_autostart({2: self.layout})
         self.assertEqual((restored, result["unconfirmed"]), ([2], []))
+        swapped = dict(self.layout, windows=[{"at": [0, 0], "size": [9, 9], "app": {"desktop_id": "evil"}}])
+        self.assertEqual(self.run_autostart({2: swapped})[0], [])                # a window's own launcher counts
         changed = dict(self.layout, apps=self.layout["apps"] + [{"desktop_id": "evil", "desktop_path": "/x/evil.desktop"}])
         restored, result = self.run_autostart({2: changed})
         self.assertEqual((restored, result["unconfirmed"]), ([], [2]))          # edited since: not started
