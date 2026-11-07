@@ -64,7 +64,7 @@ App Presets let you turn any workspace into a dedicated, persistent workstation:
 2. **Save Preset**: In the popup panel under **App Presets**, click **Save App Preset**. Workspace Presets captures window coordinates, sizes and each app's installed launcher (no commands).
 3. **Restore Preset**: Click **Restore App Preset** anytime. Workspace Presets relaunches any missing applications and rebuilds their saved tile arrangement and proportions. Floating windows regain their saved position and size.
 4. **Remove Apps from Preset**: Click the `✕` on an application's chip to remove it from the preset (this does not close your open window).
-5. **Autostart on Login**: **Autostart on session startup** is enabled by default for new App Presets. Leave it enabled to launch your saved workstation automatically whenever you log into Omarchy. Autostart only starts an app list you confirmed here (saving the App Preset or switching its autostart on); after an update from before 0.7.0, switch it off and on once.
+5. **Autostart on Login**: switch **Autostart on session startup** on (it is off for new App Presets) once you see the apps you want. The panel keeps a private copy of exactly that layout, and only that copy is started at login. After an update from before 0.7.0, switch it off and on once.
 
 ---
 

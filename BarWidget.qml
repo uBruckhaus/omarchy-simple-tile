@@ -533,7 +533,7 @@ ShellUi.BarWidget {
 
     function workspaceAutostart(wsId) {
         var layout = layoutForWorkspace(wsId)
-        return layout ? (layout.autostart !== false) : true
+        return layout ? layout.autostart === true : false      // as the helper: only an explicit on
     }
 
     function savedLayoutSummary(wsId) {
@@ -703,27 +703,12 @@ ShellUi.BarWidget {
     // Autostart only starts an app list the user confirmed here: the helper keeps a
     // fingerprint of it outside shell.json (asked a moment after the save lands).
     property var pendingApprovals: ({})
-    // The launchers the user is confirming, from the layout the panel itself just saved
-    // (the helper approves only while the saved entry still holds exactly these).
-    function launcherKeys(layout) {
-        var pairs = []
-        function add(r) {
-            if (!r || typeof r !== "object") return
-            var id = typeof r.desktop_id === "string" ? r.desktop_id : ""
-            var path = typeof r.desktop_path === "string" ? r.desktop_path : ""
-            if (id || path) pairs.push([id, path])
-        }
-        ;["apps", "windows"].forEach(function(key) {
-            (Array.isArray(layout && layout[key]) ? layout[key] : []).forEach(function(item) {
-                add(item)
-                if (item && typeof item === "object") add(item.app)
-            })
-        })
-        return pairs
-    }
+    // The layout the user sees here is what starts at login: the helper keeps a private
+    // copy of it (shell.json is never read for autostart).
     function approveAutostartSoon(wsId, on, layout) {
         var next = Object.assign({}, pendingApprovals)
-        next[String(wsId)] = on === true ? JSON.stringify(launcherKeys(layout)) : ""
+        next[String(wsId)] = on === true && layout ? JSON.stringify({apps: layout.apps || [], windows: layout.windows || [],
+                                                                    saveApps: layout.saveApps !== false}) : ""
         pendingApprovals = next
         approvalTimer.restart()
     }
@@ -908,7 +893,7 @@ ShellUi.BarWidget {
         var layouts = Object.assign({}, workspaceLayouts)
         var existing = layouts[String(wsId)] || {}
         var saveApps = existing.saveApps !== undefined ? existing.saveApps : true
-        var autostart = existing.autostart !== undefined ? existing.autostart : true
+        var autostart = existing.autostart === true      // new App Presets: off until switched on (after seeing the apps)
         layouts[String(wsId)] = {
             mode: "manual",
             saveApps: saveApps,

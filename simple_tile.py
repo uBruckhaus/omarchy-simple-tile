@@ -155,81 +155,68 @@ def capped_layout(layout):
     return out
 
 
-# --- autostart approval -------------------------------------------------------
-# shell.json can be edited by anything that can write it, so a saved app list
-# alone never starts apps at login: the user confirms it in the panel (saving
-# the App Preset or switching its autostart on), and the helper keeps a
-# fingerprint of that list in its own private file.
+# --- autostart snapshots -------------------------------------------------------
+# shell.json can be edited by anything that can write it, so it never decides what
+# starts at login. Switching autostart on in the panel (or saving an App Preset that
+# has it on) stores a private copy of the layout the panel showed; autostart restores
+# only from that copy, and only while the entry still has autostart on.
 
-def approvals_path():
+SNAPSHOTS_MAX = 512 * 1024
+
+
+def snapshots_path():
     state = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local/state")
     return Path(state) / "ubruckhaus.simple-tile" / "autostart.json"
 
 
-def _launcher_pair(record):
-    if not isinstance(record, dict):
+def snapshot_of(layout):
+    """What autostart keeps of a confirmed layout: at most MAX_SAVED windows and
+    apps (objects only), whether apps are saved; nothing else."""
+    if not isinstance(layout, dict):
         return None
-    ident, path = record.get("desktop_id"), record.get("desktop_path")
-    return (ident if isinstance(ident, str) else "", path if isinstance(path, str) else "")
+    capped = capped_layout(layout)
+    out = {"apps": capped["apps"], "windows": capped["windows"]}
+    if isinstance(layout.get("saveApps"), bool):
+        out["saveApps"] = layout["saveApps"]
+    return json.loads(json.dumps(out))
 
 
-def launcher_keys(layout):
-    """Every launcher a restore of this layout can start from: the app list,
-    each saved window and the app record inside it, as sorted unique pairs."""
-    records = []
-    for key in ("apps", "windows"):
-        items = layout.get(key) if isinstance(layout.get(key), list) else []
-        for item in items:
-            records.append(item)
-            if isinstance(item, dict):
-                records.append(item.get("app"))
-    return sorted({pair for pair in map(_launcher_pair, records) if pair and pair != ("", "")})
+def _private(info, kind):
+    return kind(info.st_mode) and info.st_uid == os.getuid() and not info.st_mode & 0o077
 
 
-def canonical_keys(value):
-    """A launcher list as the panel sent it, in the same canonical form, or None."""
-    if not isinstance(value, list) or len(value) > 3 * MAX_SAVED:
-        return None
-    pairs = set()
-    for item in value:
-        if not (isinstance(item, list) and len(item) == 2 and all(isinstance(v, str) and len(v) <= 4096 for v in item)):
-            return None
-        if tuple(item) != ("", ""):
-            pairs.add(tuple(item))
-    return sorted(pairs)
-
-
-def app_fingerprint(layout):
-    return hashlib.sha256(json.dumps(launcher_keys(layout)).encode()).hexdigest()
-
-
-def load_approvals():
-    path = approvals_path()
+def load_snapshots():
+    """The confirmed snapshots, only from a private folder and file of this user
+    (no link, nothing others can read or write); else none."""
+    path = snapshots_path()
     try:
+        if not _private(os.lstat(path.parent), stat.S_ISDIR):
+            return {}
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
     except OSError:
         return {}
     try:
         info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_size > 65536:
+        if not _private(info, stat.S_ISREG) or info.st_size > SNAPSHOTS_MAX:
             return {}
-        data = json.loads(os.read(fd, 65537))
+        data = json.loads(os.read(fd, SNAPSHOTS_MAX + 1))
     except (OSError, ValueError):
         return {}
     finally:
         os.close(fd)
-    return {k: v for k, v in data.items() if isinstance(k, str) and k.isdigit() and isinstance(v, str)} \
-        if isinstance(data, dict) else {}
+    if not isinstance(data, dict):
+        return {}
+    return {k: snapshot_of(v) for k, v in data.items() if isinstance(k, str) and k.isdigit() and snapshot_of(v)}
 
 
-def save_approvals(data):
-    path = approvals_path()
+def save_snapshots(data):
+    path = snapshots_path()
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     info = os.lstat(path.parent)
     if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
         raise RuntimeError("unsafe state directory")
     os.chmod(path.parent, 0o700)
-    fd, temp = tempfile.mkstemp(dir=path.parent, prefix=".autostart.", suffix=".tmp")
+    fd, temp = tempfile.mkstemp(dir=path.parent, prefix=".autostart.", suffix=".tmp")      # 0600
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
             json.dump(data, stream)
@@ -240,22 +227,19 @@ def save_approvals(data):
 
 
 def approve_autostart(ws_id, on, confirmed=None):
-    """The panel's confirmation: the launchers the user saw (`confirmed`, the
-    panel's own snapshot) may start at login, but only while the saved entry
-    still holds exactly those (on); or no longer (off)."""
+    """The panel's confirmation: keep `confirmed` (the layout the panel showed
+    and saved) as what starts at login (on), or forget it (off)."""
     if type(ws_id) is not int or ws_id <= 0:
         raise ValueError("invalid workspace id")
     with runtime_lock():
-        approvals = load_approvals()
-        layout = read_settings().get("workspace_layouts", {}).get(ws_id)
-        expected = canonical_keys(confirmed)
-        if on and isinstance(layout, dict) and layout.get("autostart") is True and expected is not None \
-                and expected == launcher_keys(layout):
-            approvals[str(ws_id)] = app_fingerprint(layout)
+        snapshots = load_snapshots()
+        snapshot = snapshot_of(confirmed) if on else None
+        if snapshot and (snapshot["apps"] or snapshot["windows"]):
+            snapshots[str(ws_id)] = snapshot
         else:
-            approvals.pop(str(ws_id), None)       # off, or changed since the user's action: not approved
-        save_approvals(approvals)
-    return {"status": "ok", "workspace": ws_id, "approved": str(ws_id) in approvals}
+            snapshots.pop(str(ws_id), None)
+        save_snapshots(snapshots)
+    return {"status": "ok", "workspace": ws_id, "approved": str(ws_id) in snapshots}
 
 
 def read_settings():
@@ -1004,18 +988,20 @@ def restore_geometry(ws_id, pairs):
                         raise RuntimeError("Saved tile positions could not be restored")
 
 
-def restore_workspace(ws_id, dry_run=False, conflict_action="ask"):
+def restore_workspace(ws_id, dry_run=False, conflict_action="ask", layout=None):
     with runtime_lock():
-        return _restore_workspace(ws_id, dry_run, conflict_action)
+        return _restore_workspace(ws_id, dry_run, conflict_action, layout)
 
 
-def _restore_workspace(ws_id, dry_run=False, conflict_action="ask"):
+def _restore_workspace(ws_id, dry_run=False, conflict_action="ask", layout=None):
+    """Restore a workspace: from the saved entry (a click in the panel), or from
+    `layout` (autostart's confirmed private copy)."""
     if type(ws_id) is not int or ws_id <= 0:
         raise ValueError("invalid workspace id")
     if conflict_action not in ("ask", "move", "close", "keep"):
         raise ValueError("invalid conflict action: %s" % conflict_action)
-    layouts = read_settings().get("workspace_layouts", {})
-    layout = layouts.get(ws_id)
+    if layout is None:
+        layout = read_settings().get("workspace_layouts", {}).get(ws_id)
     if not layout:
         return {"status": "no_layout", "workspace": ws_id}
     apps = layout.get("apps", [])
@@ -1214,15 +1200,16 @@ def autostart_all(dry_run=False):
 
 def _autostart_all(dry_run):
     started, unconfirmed = [], []
-    approvals = load_approvals()
+    snapshots = load_snapshots()
     for ws_id, layout in sorted(read_settings().get("workspace_layouts", {}).items()):
         if layout.get("autostart") is True:
-            if approvals.get(str(ws_id)) != app_fingerprint(layout):
-                unconfirmed.append(ws_id)       # never confirmed in the panel (or changed since): not started
+            snapshot = snapshots.get(str(ws_id))
+            if snapshot is None:
+                unconfirmed.append(ws_id)       # never confirmed in the panel: not started
                 continue
             # The batch already owns the runtime lock.
             restore = restore_workspace if dry_run else _restore_workspace
-            kwargs = {"dry_run": dry_run}
+            kwargs = {"dry_run": dry_run, "layout": snapshot}     # the confirmed copy, never shell.json's
             if not dry_run:
                 kwargs["conflict_action"] = "move"
             started.append({"workspace": ws_id, "result": restore(ws_id, **kwargs)})
@@ -1876,8 +1863,8 @@ def main(argv=None):
                         help="action to take if extra windows are found on workspace when restoring")
     parser.add_argument("--autostart", action="store_true", help="launch saved apps for all autostart workspaces")
     parser.add_argument("--approve-autostart", nargs="+", metavar="ARG",
-                        help="WS_ID 1 LAUNCHERS_JSON confirms a workspace's autostart for the launchers the panel "
-                             "showed; WS_ID 0 withdraws it")
+                        help="WS_ID 1 LAYOUT_JSON keeps the layout the panel showed as what starts at login; "
+                             "WS_ID 0 forgets it")
     parser.add_argument("--apply-preset", nargs=2, metavar=("WS_ID", "PRESET"), help="apply layout preset to workspace")
     parser.add_argument("--remove-preset", type=int, metavar="WS_ID", help="remove layout preset from workspace")
     parser.add_argument("--remove-all-presets", action="store_true", help="remove layout presets from all workspaces (native layout)")
@@ -1906,7 +1893,7 @@ def main(argv=None):
             if len(values) not in (2, 3) or not values[0].isdigit() or values[1] not in ("0", "1") \
                     or (len(values) == 3 and len(values[2]) > 65536):
                 raise ValueError("invalid approval")
-            confirmed = json.loads(values[2]) if len(values) == 3 else None
+            confirmed = json.loads(values[2]) if len(values) == 3 else None   # the layout the panel showed
             print(json.dumps(approve_autostart(int(values[0]), values[1] == "1", confirmed)))
             return 0
         if args.remove_preset is not None:

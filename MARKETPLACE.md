@@ -54,8 +54,8 @@ pixel sizes, and apps that cannot open another window may time out.
 ## Install
 
 Requires Omarchy with the Quickshell plugin system, Python 3.10+, and Hyprland
-0.56.2 with its Lua dispatch API. App launching uses saved argument lists or
-`uwsm-app`; PyGObject/GioUnix is an optional fallback.
+0.56.2 with its Lua dispatch API. Apps start only from their installed launcher
+(`uwsm-app`; PyGObject/GioUnix is an optional fallback), never from a saved command.
 
 ```sh
 omarchy plugin add https://github.com/uBruckhaus/omarchy-simple-tile.git --enable

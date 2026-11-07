@@ -482,15 +482,15 @@ class AppLaunchTests(unittest.TestCase):
                 3: {"autostart": True, "apps": [{"name": "App3", "class": "app3"}]},
             }
         }
-        approved = {str(ws): tile.app_fingerprint(settings["workspace_layouts"][ws]) for ws in (2, 3)}
+        approved = {str(ws): {"apps": settings["workspace_layouts"][ws]["apps"], "windows": []} for ws in (2, 3)}
         with patch.object(tile, "read_settings", return_value=settings), \
-                patch.object(tile, "load_approvals", return_value=approved), \
+                patch.object(tile, "load_snapshots", return_value=approved), \
                 patch.object(tile, "restore_workspace", return_value={"status": "ok"}) as restore:
             res = tile.autostart_all(dry_run=True)
             self.assertEqual(res["status"], "ok")
             self.assertEqual(len(res["workspaces"]), 2)
-            restore.assert_any_call(2, dry_run=True)
-            restore.assert_any_call(3, dry_run=True)
+            restore.assert_any_call(2, dry_run=True, layout=approved["2"])
+            restore.assert_any_call(3, dry_run=True, layout=approved["3"])
 
 
     def test_is_app_available_checks_command_and_desktop(self):
@@ -1090,8 +1090,9 @@ class HostileInputTests(unittest.TestCase):
                 tile.load_shell_config(fifo)                     # refused, never blocks
 
 
-class AutostartApprovalTests(unittest.TestCase):
-    """0.7.0 release review (High): a saved app list in shell.json alone never starts apps at login."""
+class AutostartSnapshotTests(unittest.TestCase):
+    """0.7.0 release review: shell.json never decides what starts at login; only a private copy of the
+    layout the panel showed does (shared with Theme Manager)."""
 
     def setUp(self):
         import tempfile
@@ -1103,35 +1104,40 @@ class AutostartApprovalTests(unittest.TestCase):
         lock = patch.object(tile, "runtime_lock")
         lock.start()
         self.addCleanup(lock.stop)
-        self.layout = {"autostart": True, "apps": [{"desktop_id": "foot", "desktop_path": "/usr/share/applications/foot.desktop"}]}
+        self.shown = {"autostart": True, "apps": [{"desktop_id": "foot", "desktop_path": "/usr/share/applications/foot.desktop"}],
+                      "windows": [{"class": "foot", "at": [0, 0], "size": [800, 600]}]}
 
     def run_autostart(self, layouts):
         restored = []
         with patch.object(tile, "read_settings", return_value={"workspace_layouts": layouts}), \
-                patch.object(tile, "_restore_workspace", side_effect=lambda ws, **k: restored.append(ws) or {"failed": []}):
+                patch.object(tile, "send_notification") as notify, \
+                patch.object(tile, "_restore_workspace",
+                             side_effect=lambda ws, **k: restored.append((ws, k.get("layout"))) or {"failed": []}):
             result = tile._autostart_all(False)
-        return restored, result
+        return restored, result, notify
 
-    def test_only_a_confirmed_unchanged_list_starts(self):
-        restored, result = self.run_autostart({2: self.layout})
-        self.assertEqual((restored, result["unconfirmed"]), ([], [2]))          # forged or never confirmed
-        seen = [list(pair) for pair in tile.launcher_keys(self.layout)]          # what the panel showed
-        with patch.object(tile, "read_settings", return_value={"workspace_layouts": {2: self.layout}}):
-            self.assertFalse(tile.approve_autostart(2, True)["approved"])        # no snapshot: never
-            self.assertFalse(tile.approve_autostart(2, True, [["evil", ""]])["approved"])   # changed since
-            self.assertTrue(tile.approve_autostart(2, True, seen)["approved"])
-        restored, result = self.run_autostart({2: self.layout})
-        self.assertEqual((restored, result["unconfirmed"]), ([2], []))
-        swapped = dict(self.layout, windows=[{"at": [0, 0], "size": [9, 9], "app": {"desktop_id": "evil"}}])
-        self.assertEqual(self.run_autostart({2: swapped})[0], [])                # a window's own launcher counts
-        changed = dict(self.layout, apps=self.layout["apps"] + [{"desktop_id": "evil", "desktop_path": "/x/evil.desktop"}])
-        restored, result = self.run_autostart({2: changed})
-        self.assertEqual((restored, result["unconfirmed"]), ([], [2]))          # edited since: not started
-        with patch.object(tile, "read_settings", return_value={"workspace_layouts": {2: self.layout}}):
-            self.assertFalse(tile.approve_autostart(2, False)["approved"])
-        self.assertEqual(self.run_autostart({2: self.layout})[0], [])
-        mode = os.stat(tile.approvals_path()).st_mode & 0o777
-        self.assertEqual(mode & 0o077, 0)                                       # private file
+    def test_only_the_confirmed_copy_starts(self):
+        restored, result, notify = self.run_autostart({2: self.shown})
+        self.assertEqual((restored, result["unconfirmed"]), ([], [2]))
+        notify.assert_called_once()
+        self.assertTrue(tile.approve_autostart(2, True, self.shown)["approved"])
+        forged = dict(self.shown, apps=[{"desktop_id": "evil"}] * 16, windows=[{"app": {"desktop_id": "evil"}}] * 16)
+        restored = self.run_autostart({2: forged})[0]                       # shell.json edited afterwards
+        self.assertEqual(restored[0][1]["apps"], self.shown["apps"])          # the confirmed copy is used
+        self.assertEqual(len(restored[0][1]["windows"]), 1)
+        self.assertEqual(self.run_autostart({2: dict(self.shown, autostart=False)})[0], [])
+        self.assertFalse(tile.approve_autostart(2, False)["approved"])
+        self.assertEqual(self.run_autostart({2: self.shown})[0], [])
+
+    def test_the_copy_file_is_private(self):
+        tile.approve_autostart(2, True, self.shown)
+        path = tile.snapshots_path()
+        self.assertEqual(os.stat(path).st_mode & 0o077, 0)
+        os.chmod(path, 0o644)
+        self.assertEqual(tile.load_snapshots(), {})                           # readable by others: not trusted
+        os.chmod(path, 0o600)
+        os.chmod(path.parent, 0o755)
+        self.assertEqual(tile.load_snapshots(), {})
 
     def test_saved_lists_are_capped(self):
         layout = {"windows": [{"at": [0, 0]}] * 40 + ["x"], "apps": "nope"}
