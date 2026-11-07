@@ -19,6 +19,10 @@ optional session autostart brings your saved workspaces back after login.
   a 2×2 grid, Floating and Scrolling; Native mode has no limit or automatic overflow.
   On Omarchy 4.5, Floating and Scrolling are the workspace's own Omarchy mode
   (Super + L), so the popup and Omarchy always agree.
+- **Workspace preview (new in 0.7.0):** the selected workspace drawn large under
+  the cards. Drag a window onto a layout or out for one fewer, drag the line to
+  size windows, + and − for a window more or less, swap saved windows of an App
+  Preset, and Undo (Ctrl+Z).
 - **Saved app workspaces:** layout snapshots, real app icons, and support for
   multiple saved windows of one app.
 - **Restore choices:** move conflicting windows, close them, keep them floating,
@@ -32,8 +36,8 @@ Restoration supports ungrouped, non-fullscreen rectangular tiled arrangements
 and saved floating geometry. It does not restore app content such as documents
 or browser tabs. Missing apps start from their installed launcher (never a
 launcher name or path taken from a window's class); a window's
-own command line is never run (a terminal's foreground command only from a
-terminal installed on this computer). Monitor geometry and gaps can affect exact
+own command line is never run, and no saved command is either (a terminal
+reopens as a plain terminal). Monitor geometry and gaps can affect exact
 pixel sizes, and apps that cannot open another window may time out.
 
 ## Listing metadata

@@ -126,9 +126,20 @@ reports failures so you can retry.
 Missing apps are started from their installed launcher (`.desktop` file). A
 window with no matching launcher is not started: the popup says so. What a
 window's own process reports about itself (its command line, its class) is never
-run as a command, because a sandboxed app could name a host program there. The
-one command that is saved is the program running in a terminal window, and only
-when that window is a terminal installed on this computer (not a sandboxed one).
+run as a command, because a sandboxed app could name a host program there. No
+command is saved or run at all: a terminal window is saved as its terminal's
+launcher and reopens as a plain terminal (since 0.7.0).
+
+## Workspace preview
+
+The selected workspace is drawn large under the workspace cards, in your theme's colors.
+
+- **Change the layout:** drag a window onto one of the layouts in the tray that appears at the bottom. Drag it out of the preview for one window fewer. The master window dragged into the other half switches Master Left and Master Right.
+- **Size the windows:** drag the line between windows (the master share, or the middle column of Columns). It snaps to even; a double-click makes the split even again.
+- **A window more or less:** click **+** for one more with the same layout, or drag **+** onto the preview and drop it where the new window should go: the place picks the layout. **−** removes one; at one window the workspace goes back to the default limit.
+- **App Presets:** drag one saved window onto another to swap them in the saved layout.
+- **Keys:** ←/→ choose a window, Shift+←/→ swap saved ones, ↑/↓ change the layout, `[` and `]` the size, `+` and `−`. Esc cancels a drag.
+- **Undo** (or Ctrl+Z) takes back only the last change made in the preview.
 
 ## Clear all presets
 

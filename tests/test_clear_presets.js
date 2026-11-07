@@ -9,7 +9,7 @@ for (const succeeds of [true, false]) {
     test(`clear all presets, settings save succeeds: ${succeeds}`, () => {
         const original = {maxWindows: 3, active: true, workspaceLayouts: {'2': {autostart: true}}, workspaceCaps: {'2': 4}, workspaceModes: {'2': 'manual'}, workspaceAutoPresets: {'2': 'grid'}};
         const state = vm.createContext({settings: original, moduleName: 'ubruckhaus.simple-tile', confirmClearAll: true,
-            applyPresetWorker: {running: false}, bar: {shell: {updateEntryInline: () => succeeds}}, helperScriptPath: () => '/helper.py'});
+            applyPresetWorker: {running: false}, runHelper(key, args) { this.applyPresetWorker.command = ['python3', this.helperScriptPath()].concat(args); this.applyPresetWorker.running = true; }, dropHelperJobs() {}, bar: {shell: {updateEntryInline: () => succeeds}}, helperScriptPath: () => '/helper.py'});
         state.root = state;
         Object.assign(state, english);
         vm.runInContext(qml.match(/    function saveSettingsEntry\([^]*?\n    }/)[0], state);

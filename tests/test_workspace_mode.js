@@ -16,6 +16,8 @@ function workspace(saved = false, saveSucceeds = true) {
         failed: false, activeWorkspaceTab: 'presets', lastMessage: '',
         omarchyModes: {}, omarchyModesSupported: false,
         applyPresetWorker: {running: false},
+        // The panel's one helper queue, as the old direct start (tests read the command).
+        runHelper(key, args) { this.applyPresetWorker.command = ['python3', this.helperScriptPath()].concat(args); this.applyPresetWorker.running = true; }, dropHelperJobs() {},
         bar: {shell: {updateEntryInline: () => saveSucceeds}},
     });
     state.root = state;

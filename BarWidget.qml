@@ -9,6 +9,7 @@ import qs.Commons as Theme
 import "native/Ui" as Ui
 import qs.Ui as ShellUi
 import "LayoutState.js" as LayoutState
+import "PreviewLogic.js" as PreviewLogic
 import "I18n.js" as I18n
 
 ShellUi.BarWidget {
@@ -331,13 +332,12 @@ ShellUi.BarWidget {
 
         root.expectOmarchyMode(wsId, preset)
         if (preset === "none") {
-            applyPresetWorker.command = ["python3", root.helperScriptPath(), "--remove-preset", String(wsId)]
+            root.runHelper(String(wsId), ["--remove-preset", String(wsId)])
             lastMessage = root.t("wsNativeMsg", [wsId])
         } else {
-            applyPresetWorker.command = ["python3", root.helperScriptPath(), "--apply-preset", String(wsId), preset]
+            root.runHelper(String(wsId), ["--apply-preset", String(wsId), preset])
             lastMessage = root.t("setWsLayout", [wsId, autoPresetLabel(preset)])
         }
-        applyPresetWorker.running = true
     }
 
     function removeWorkspaceAutoPreset(wsId) {
@@ -370,8 +370,7 @@ ShellUi.BarWidget {
 
         var defaultPreset = defaultAutoPresetFor(effectiveCapFor(wsId))
         root.expectOmarchyMode(wsId, defaultPreset)
-        applyPresetWorker.command = ["python3", root.helperScriptPath(), "--apply-preset", String(wsId), defaultPreset]
-        applyPresetWorker.running = true
+        root.runHelper(String(wsId), ["--apply-preset", String(wsId), defaultPreset])
         lastMessage = root.t("resetWsLayout", [wsId, autoPresetLabel(defaultPreset)])
     }
 
@@ -531,11 +530,17 @@ ShellUi.BarWidget {
         if (!iconName || typeof iconName !== "string") {
             return Quickshell.iconPath("application-x-executable", true)
         }
-        if (iconName.indexOf("file://") === 0 || iconName.indexOf("image://") === 0) {
-            return iconName
-        }
+        // A saved icon comes from shell.json: never a URL, and a file only from the usual
+        // icon folders (Omarchy web apps keep theirs in ~/.local/share/applications/icons).
+        if (iconName.indexOf("://") >= 0 || iconName.length > 512)
+            return Quickshell.iconPath("application-x-executable", true)
         if (iconName.charAt(0) === "/") {
-            return "file://" + iconName
+            var home = Quickshell.env("HOME") || ""
+            var dirs = ["/usr/share/icons/", "/usr/share/pixmaps/", home + "/.local/share/applications/icons/",
+                        home + "/.local/share/icons/"]
+            var inside = home.length > 1 && dirs.some(function(d) { return iconName.indexOf(d) === 0 })
+            var clean = iconName.indexOf("/../") < 0 && iconName.indexOf("/./") < 0 && iconName.indexOf("//") < 0
+            return inside && clean ? "file://" + iconName : Quickshell.iconPath("application-x-executable", true)
         }
         if (bar && bar.shell && bar.shell.appLibrary) {
             var src = bar.shell.appLibrary.iconSource(iconName)
@@ -609,13 +614,11 @@ ShellUi.BarWidget {
         if (wasFree) {
             var tiling = defaultAutoPresetFor(newCap)
             expectOmarchyMode(wsId, tiling)
-            applyPresetWorker.command = ["python3", root.helperScriptPath(), "--apply-preset", String(wsId), tiling]
-            applyPresetWorker.running = true
+            root.runHelper(String(wsId), ["--apply-preset", String(wsId), tiling])
         } else if (wasManual || wasNative) {
             var activePreset = autoPresetForWorkspace(wsId) || defaultAutoPresetFor(newCap)
             if (activePreset && activePreset !== "none" && newCap > 1) {
-                applyPresetWorker.command = ["python3", root.helperScriptPath(), "--apply-preset", String(wsId), activePreset]
-                applyPresetWorker.running = true
+                root.runHelper(String(wsId), ["--apply-preset", String(wsId), activePreset])
             }
         }
     }
@@ -647,8 +650,7 @@ ShellUi.BarWidget {
         if (wasManual) {
             var activePreset = autoPresetForWorkspace(wsId) || defaultAutoPresetFor(root.cap)
             if (activePreset && activePreset !== "none" && root.cap > 1) {
-                applyPresetWorker.command = ["python3", root.helperScriptPath(), "--apply-preset", String(wsId), activePreset]
-                applyPresetWorker.running = true
+                root.runHelper(String(wsId), ["--apply-preset", String(wsId), activePreset])
             }
         }
     }
@@ -661,11 +663,11 @@ ShellUi.BarWidget {
         if (failed) return
         activeWorkspaceTab = mode === "manual" ? "manual" : "presets"
         if (mode === "manual") {
+            root.dropHelperJobs(String(wsId))      // a waiting layout for it is no longer wanted
             lastMessage = root.t("wsManualMsg", [wsId])
         } else {
             var preset = autoPresetForWorkspace(wsId)
-            applyPresetWorker.command = ["python3", root.helperScriptPath(), "--apply-preset", String(wsId), preset]
-            applyPresetWorker.running = true
+            root.runHelper(String(wsId), ["--apply-preset", String(wsId), preset])
             lastMessage = preset === "none"
                 ? root.t("wsNativeMsg", [wsId])
                 : root.t("wsResumed", [wsId, autoPresetLabel(preset)])
@@ -704,8 +706,7 @@ ShellUi.BarWidget {
             lastMessage = root.t("removedAppPresetFor", [wsId])
             var defaultPreset = autoPresetForWorkspace(wsId) || defaultAutoPresetFor(effectiveCapFor(wsId))
             if (defaultPreset && defaultPreset !== "none") {
-                applyPresetWorker.command = ["python3", root.helperScriptPath(), "--apply-preset", String(wsId), defaultPreset]
-                applyPresetWorker.running = true
+                root.runHelper(String(wsId), ["--apply-preset", String(wsId), defaultPreset])
             }
         }
     }
@@ -722,7 +723,13 @@ ShellUi.BarWidget {
         entry["workspaceAutoPresets"] = currentPresets
 
         var currentModes = Object.assign({}, workspaceModes)
-        delete currentModes[String(wsId)]
+        // A saved App Preset stays saved but off ("auto"); without the entry its own
+        // "manual" mark would switch it on again.
+        if (workspaceLayouts[String(wsId)]) currentModes[String(wsId)] = "auto"
+        else delete currentModes[String(wsId)]
+        var currentSplits = Object.assign({}, setting("workspaceSplits", {}) || {})
+        delete currentSplits[String(wsId)]
+        entry["workspaceSplits"] = currentSplits
         entry["workspaceModes"] = currentModes
 
         if (saveSettingsEntry(entry)) {
@@ -730,8 +737,7 @@ ShellUi.BarWidget {
             failed = false
             var defaultPreset = defaultAutoPresetFor(root.cap)
             if (defaultPreset && defaultPreset !== "none" && root.cap > 1) {
-                applyPresetWorker.command = ["python3", root.helperScriptPath(), "--apply-preset", String(wsId), defaultPreset]
-                applyPresetWorker.running = true
+                root.runHelper(String(wsId), ["--apply-preset", String(wsId), defaultPreset])
             }
             lastMessage = root.t("resetWsDefault", [wsId, root.cap, autoPresetLabel(defaultPreset)])
         } else {
@@ -761,6 +767,8 @@ ShellUi.BarWidget {
         entry["defaultAutoPresets"] = {"1": "none", "2": "none", "3": "none", "4": "none"}
         entry["workspaceModes"] = {}
         entry["workspaceLayouts"] = {}
+        entry["workspaceSplits"] = {}
+        delete entry["defaultSplit"]
         if (saveSettingsEntry(entry)) {
             settings = entry
             restoreConflict = null
@@ -768,8 +776,7 @@ ShellUi.BarWidget {
             failedAppNames = ({})
             failedAppDetails = ({})
             failed = false
-            applyPresetWorker.command = ["python3", root.helperScriptPath(), "--remove-all-presets"]
-            applyPresetWorker.running = true
+            root.runHelper("all", ["--remove-all-presets"])
             lastMessage = root.t("clearedAllLayoutAnd")
         } else {
             failed = true
@@ -787,8 +794,7 @@ ShellUi.BarWidget {
         if (saveSettingsEntry(entry)) {
             settings = entry
             failed = false
-            applyPresetWorker.command = ["python3", root.helperScriptPath(), "--remove-all-presets"]
-            applyPresetWorker.running = true
+            root.runHelper("all", ["--remove-all-presets"])
             lastMessage = root.t("removedLayoutPresetsFor")
         } else {
             failed = true
@@ -802,14 +808,17 @@ ShellUi.BarWidget {
         entry["workspaceAutoPresets"] = {}
         var modes = Object.assign({}, workspaceModes)
         for (var k in modes) {
-            if (modes[k] === "manual") delete modes[k]
+            if (modes[k] === "manual") modes[k] = "auto"      // saved App Presets stay saved, off
+        }
+        for (var lk in workspaceLayouts) {
+            if (workspaceLayouts[lk] && workspaceLayouts[lk].mode === "manual") modes[lk] = "auto"
         }
         entry["workspaceModes"] = modes
+        entry["workspaceSplits"] = {}
         if (saveSettingsEntry(entry)) {
             settings = entry
             failed = false
-            applyPresetWorker.command = ["python3", root.helperScriptPath(), "--reset-all-presets"]
-            applyPresetWorker.running = true
+            root.runHelper("all", ["--reset-all-presets"])
             lastMessage = root.t("resetAllDefaults", [root.cap, autoPresetLabel(defaultAutoPresetFor(root.cap))])
         } else {
             failed = true
@@ -865,6 +874,7 @@ ShellUi.BarWidget {
         entry["workspaceModes"] = modes
         if (saveSettingsEntry(entry)) {
             settings = entry
+            root.dropHelperJobs(String(wsId))      // a waiting layout would rearrange the saved App Preset
             failed = false
             lastMessage = root.t("savedAppPresetFor", [wsId, res.count || 0])
             activeWorkspaceTab = "manual"
@@ -886,7 +896,101 @@ ShellUi.BarWidget {
         opened = true
     }
     function close() {
+        workspacePreview.cancelDrag()      // a preview drag never survives closing
         opened = false
+    }
+
+    // --- the large workspace preview: changes, their desktop work, Undo ----------------
+    // Every change is built from the entry as saved now (Theme Manager may have
+    // changed it), saved, then the desktop part runs one after the other.
+    property var previewUndo: []           // [{label, before, after, ws}], newest last
+    property string previewMessage: ""
+    function previewEntry() {
+        return PreviewLogic.copy(Object.assign({}, settings, {id: moduleName}))
+    }
+    function commitPreview(label, wsId, change) {
+        var before = previewEntry()
+        var entry = previewEntry()
+        var action = change(entry)
+        if (JSON.stringify(entry) === JSON.stringify(before)) return
+        if (!saveSettingsEntry(entry)) {
+            failed = true
+            lastMessage = root.t("couldNotSaveSettings")
+            return
+        }
+        settings = entry
+        failed = false
+        var stack = previewUndo.slice(-19)
+        stack.push({label: label, before: before, after: PreviewLogic.copy(entry), ws: wsId})
+        previewUndo = stack
+        previewMessage = label
+        lastMessage = label
+        if (action) queuePreviewAction(action)
+    }
+    function queuePreviewAction(action) {
+        if (action[0] === "remove") {
+            root.expectOmarchyMode(action[1], "none")
+            root.runHelper(String(action[1]), ["--remove-preset", String(action[1])])
+        } else {
+            root.expectOmarchyMode(action[1], action[2])
+            root.runHelper(String(action[1]), ["--apply-preset", String(action[1]), action[2]])
+        }
+    }
+
+    // One helper run at a time, for every control: a newer job for the same
+    // workspace replaces one still waiting, a job for all workspaces replaces
+    // everything waiting (it covers it). Never two writers on the desktop.
+    property var helperQueue: []
+    function runHelper(key, args) {
+        var queue = key === "all" ? [] : helperQueue.filter(function(job) { return job.key !== key })
+        queue.push({key: key, argv: ["python3", root.helperScriptPath()].concat(args)})
+        helperQueue = queue
+        helperPump.restart()
+    }
+    function dropHelperJobs(key) {
+        helperQueue = helperQueue.filter(function(job) { return job.key !== key })
+    }
+    Timer {
+        id: helperPump
+        interval: 0
+        onTriggered: {
+            if (root.helperQueue.length === 0) return
+            if (applyPresetWorker.running) { interval = 50; restart(); return }
+            interval = 0
+            var queue = root.helperQueue.slice()
+            var job = queue.shift()
+            root.helperQueue = queue
+            applyPresetWorker.command = job.argv
+            applyPresetWorker.running = true
+        }
+    }
+
+    function undoPreview() {
+        if (!previewUndo.length) return false
+        var stack = previewUndo.slice()
+        var record = stack.pop()
+        var entry = previewEntry()
+        // Only what that change did goes back; later changes (also Theme Manager's) stay.
+        if (!PreviewLogic.undoMerge(entry, record.before, record.after)) {
+            previewUndo = stack                   // nothing of it is left to take back
+            previewMessage = root.t("pvNothingToUndo")
+            return true
+        }
+        if (!saveSettingsEntry(entry)) {
+            failed = true                         // kept: Undo can be tried again
+            lastMessage = root.t("couldNotSaveSettings")
+            return true
+        }
+        previewUndo = stack
+        settings = entry
+        previewMessage = root.t("pvUndone")
+        lastMessage = previewMessage
+        var wsId = record.ws
+        if (wsId > 0 && !PreviewLogic.isManual(entry, wsId)) {
+            var preset = PreviewLogic.presetFor(entry, wsId, root.omarchyModes)
+            queuePreviewAction(preset === "none" || !preset ? ["remove", wsId] : ["apply", wsId, preset])
+        }
+        return true
     }
     function closeForPopoutSwitch() {
         popoutSwitchClosing = true
@@ -1036,7 +1140,7 @@ ShellUi.BarWidget {
 
     Process {
         id: applyPresetWorker
-        onExited: root.syncOmarchyModes(false)
+        onExited: { root.syncOmarchyModes(false); helperPump.restart() }
         stdout: StdioCollector {
             onStreamFinished: {
                 try {
@@ -1358,6 +1462,7 @@ ShellUi.BarWidget {
                     x: 9; y: -1; width: 6; height: 6; radius: 3
                     color: Commons.Color.urgent
                     Text {
+                        textFormat: Text.PlainText
                         anchors.centerIn: parent
                         text: "!"
                         color: "#ffffff"
@@ -1422,8 +1527,12 @@ ShellUi.BarWidget {
             width: parent.width
             spacing: Style.space(12)
             // Esc and Backspace leave the settings page first.
-            Keys.onEscapePressed: { if (root.showSettingsView || root.showInfoView) { root.showSettingsView = false; root.showInfoView = false } else root.close() }
+            Keys.onEscapePressed: { if (workspacePreview.cancelDrag()) return; if (root.showSettingsView || root.showInfoView) { root.showSettingsView = false; root.showInfoView = false } else root.close() }
             Keys.onPressed: function(event) {
+                if (event.key === Qt.Key_Z && (event.modifiers & Qt.ControlModifier) && !root.showSettingsView && !root.showInfoView) {
+                    event.accepted = root.undoPreview()
+                    return
+                }
                 if (event.key === Qt.Key_Backspace && (root.showSettingsView || root.showInfoView)) { root.showSettingsView = false; root.showInfoView = false; event.accepted = true }
             }
 
@@ -1432,6 +1541,7 @@ ShellUi.BarWidget {
                 height: Style.space(28)
 
                 Text {
+                    textFormat: Text.PlainText
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
                     text: root.t("workspacePresets2")
@@ -1472,6 +1582,7 @@ ShellUi.BarWidget {
             }
 
             Text {
+                textFormat: Text.PlainText
                 width: parent.width
                 text: root.t("aLittleRoomTo")
                 color: Commons.Color.foreground
@@ -1520,11 +1631,13 @@ ShellUi.BarWidget {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: Style.space(4)
                                 Text {
+                                    textFormat: Text.PlainText
                                     text: "💡"
                                     font.pixelSize: Style.font.bodySmall
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                                 Text {
+                                    textFormat: Text.PlainText
                                     text: root.activeHintTitle
                                     color: Commons.Color.accent
                                     font.family: Style.font.family
@@ -1547,6 +1660,7 @@ ShellUi.BarWidget {
                     }
 
                     Text {
+                        textFormat: Text.PlainText
                         width: parent.width
                         text: root.activeHintBody
                         color: Commons.Color.foreground
@@ -1557,6 +1671,7 @@ ShellUi.BarWidget {
                     }
 
                     Text {
+                        textFormat: Text.PlainText
                         visible: root.activeHintTip !== ""
                         width: parent.width
                         text: root.activeHintTip
@@ -1694,6 +1809,7 @@ ShellUi.BarWidget {
                     height: Style.space(22)
 
                     Text {
+                        textFormat: Text.PlainText
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
                         text: root.t("workspaces")
@@ -1754,6 +1870,7 @@ ShellUi.BarWidget {
                     enabled: false
 
                     Text {
+                        textFormat: Text.PlainText
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
                         text: root.t("allWorkspaces")
@@ -1765,6 +1882,7 @@ ShellUi.BarWidget {
                     }
 
                     Text {
+                        textFormat: Text.PlainText
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
                         text: root.t("defaultWindows", [root.cap])
@@ -1833,6 +1951,7 @@ ShellUi.BarWidget {
                                     spacing: Style.space(3)
 
                                     Text {
+                                        textFormat: Text.PlainText
                                         text: wsCard.modelData
                                         color: Commons.Color.foreground
                                         font.family: Style.font.family
@@ -1852,6 +1971,7 @@ ShellUi.BarWidget {
                                 }
 
                                 Text {
+                                    textFormat: Text.PlainText
                                     anchors.right: parent.right
                                     anchors.verticalCenter: parent.verticalCenter
                                     text: wsCard.isManual ? root.t("appPreset") : (root.isWorkspaceNative(wsCard.modelData) ? root.t("noLimit") : root.isWorkspaceFloating(wsCard.modelData) ? root.t("floating") : root.isWorkspaceScrolling(wsCard.modelData) ? root.t("scrolling") : root.t("maxN", [root.capForWorkspace(wsCard.modelData)]))
@@ -1937,6 +2057,7 @@ ShellUi.BarWidget {
                                                     sourceSize.height: Style.space(12)
                                                     source: root.resolveIcon(modelData.app ? modelData.app.icon : modelData.icon)
                                                     smooth: true
+                                                    asynchronous: true
                                                     visible: width >= 6 && height >= 6
                                                 }
                                             }
@@ -1945,6 +2066,7 @@ ShellUi.BarWidget {
 
                                     // CASE 1b: Manual mode without saved windows
                                     Text {
+                                        textFormat: Text.PlainText
                                         anchors.centerIn: parent
                                         visible: wsCard.isManual && wsCard.savedWindows.length === 0
                                         text: root.t("noAppPreset")
@@ -2226,6 +2348,7 @@ ShellUi.BarWidget {
                                             border.color: "#686873"
                                             opacity: 1.0
                                             Text {
+                                                textFormat: Text.PlainText
                                                 anchors.centerIn: parent
                                                 text: root.t("native")
                                                 color: Commons.Color.foreground
@@ -2242,6 +2365,101 @@ ShellUi.BarWidget {
                 }
             }
 
+            // The chosen workspace large, with drag and drop (also on All Workspaces).
+            WorkspacePreview {
+                id: workspacePreview
+                width: parent.width
+                readonly property var entry: Object.assign({}, root.settings)
+                readonly property var savedList: PreviewLogic.savedWindows(entry, ws)
+                ws: root.selectedWorkspace
+                cap: ws <= 0 ? PreviewLogic.globalCap(entry) : PreviewLogic.effectiveCap(entry, ws)
+                preset: PreviewLogic.shownPreset(entry, ws, root.omarchyModes)
+                split: PreviewLogic.splitFor(entry, ws)
+                manual: ws > 0 && PreviewLogic.isManual(entry, ws)
+                rects: manual ? PreviewLogic.windowRects(savedList, null) : PreviewLogic.presetRects(preset, cap, split)
+                dashed: manual ? savedList.length === 0 : preset === "none"
+                addCap: PreviewLogic.addedCap(entry, ws, root.omarchyModes) || 0
+                plusVisible: !manual && addCap > 0
+                minusVisible: PreviewLogic.canRemoveWindow(entry, ws, root.omarchyModes)
+                tilesFreely: PreviewLogic.tilesFreely(entry, ws, root.omarchyModes)
+                trayTargets: PreviewLogic.trayTargets(entry, ws, cap, root.omarchyModes)
+                fg: Commons.Color.foreground
+                bg: Commons.Color.background
+                accent: Commons.Color.accent
+                allLabel: ws === 0 ? root.t("pvAllDefault") : ""
+                t: function(key, args) { return root.t(key, args) }
+                presetLabel: function(p) { return root.autoPresetLabel(p) }
+                presetForCap: function(c) { return PreviewLogic.presetForCap(entry, ws, c) }
+
+                onAddRequested: function(wsId, chosen) {
+                    var now = root.previewEntry()
+                    var next = PreviewLogic.addedCap(now, wsId, root.omarchyModes)
+                    if (next === null) return
+                    var shown = root.autoPresetLabel(chosen || PreviewLogic.presetForCap(now, wsId, next))
+                    var label = PreviewLogic.tilesFreely(now, wsId, root.omarchyModes)
+                        ? root.t("pvTileWith", [next, shown]) : root.t("pvMax", [next, shown])
+                    root.commitPreview(label, wsId, function(e) {
+                        return PreviewLogic.addWindow(e, wsId, chosen || null, root.omarchyModes)
+                    })
+                }
+                onRemoveRequested: function(wsId) {
+                    var now = root.previewEntry()
+                    var next = PreviewLogic.removedCap(now, wsId, root.omarchyModes)
+                    if (next === null) return
+                    var current = wsId <= 0 ? PreviewLogic.globalCap(now) : PreviewLogic.effectiveCap(now, wsId)
+                    var label = current === 1 ? root.t("pvResetLimit", [next]) : root.t("windowLimitN", [next])
+                    root.commitPreview(label, wsId, function(e) { return PreviewLogic.removeWindow(e, wsId, root.omarchyModes) })
+                }
+                onSplitRequested: function(wsId, value) {
+                    root.commitPreview(value === null ? root.t("pvEvenSplit") : splitLabel(value), wsId, function(e) {
+                        return PreviewLogic.setSplit(e, wsId, value, root.omarchyModes)
+                    })
+                }
+                onCapRequested: function(wsId, next) {
+                    root.commitPreview(root.t("windowLimitN", [next]), wsId, function(e) {
+                        return wsId <= 0 ? PreviewLogic.setGlobalCap(e, next) : PreviewLogic.setCap(e, wsId, next, root.omarchyModes)
+                    })
+                }
+                onPresetRequested: function(wsId, chosen) {
+                    root.commitPreview(root.t("pvMax", [cap, root.autoPresetLabel(chosen)]), wsId, function(e) {
+                        return wsId <= 0 ? PreviewLogic.setDefaultPreset(e, PreviewLogic.globalCap(e), chosen)
+                                         : PreviewLogic.setPreset(e, wsId, chosen)
+                    })
+                }
+                onSavedSwapRequested: function(wsId, first, second) {
+                    root.commitPreview(root.t("pvSwappedSaved"), wsId, function(e) {
+                        return PreviewLogic.swapSaved(e, wsId, first, second)
+                    })
+                }
+            }
+
+            // What the last preview change did, with Undo (also Ctrl+Z).
+            Row {
+                width: parent.width
+                spacing: Style.space(8)
+                visible: root.previewMessage !== "" || root.previewUndo.length > 0
+                Text {
+                    width: parent.width - (undoButton.visible ? undoButton.width + parent.spacing : 0)
+                    anchors.verticalCenter: parent.verticalCenter
+                    textFormat: Text.PlainText
+                    text: root.previewMessage !== "" ? root.previewMessage : root.t("pvTip")
+                    elide: Text.ElideRight
+                    color: Commons.Color.foreground
+                    opacity: 0.7
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
+                }
+                Ui.Button {
+                    id: undoButton
+                    visible: root.previewUndo.length > 0
+                    text: root.t("pvUndo")
+                    bordered: true
+                    focusable: true
+                    onClicked: root.undoPreview()
+                    tooltipText: root.t("pvUndoTip")
+                }
+            }
+
             // Mode Selector and controls for individual workspace
             Item {
                 visible: root.selectedWorkspace > 0
@@ -2254,6 +2472,7 @@ ShellUi.BarWidget {
                     spacing: Style.space(8)
 
                     Text {
+                        textFormat: Text.PlainText
                         text: root.t("workspaceN", [root.selectedWorkspace]).toUpperCase() + (root.selectedWorkspace === root.currentWsId ? root.t("active2") : "")
                         color: Commons.Color.foreground
                         opacity: 0.65
@@ -2325,6 +2544,7 @@ ShellUi.BarWidget {
                         }
 
                         Text {
+                            textFormat: Text.PlainText
                             text: root.t("layoutPreset")
                             color: Commons.Color.foreground
                             opacity: 0.65
@@ -2380,6 +2600,7 @@ ShellUi.BarWidget {
                                 spacing: Style.space(6)
 
                                 Text {
+                                    textFormat: Text.PlainText
                                     anchors.verticalCenter: parent.verticalCenter
                                     width: parent.width - removeAppPresetBtn.width - Style.space(6)
                                     text: root.t("appPresetSaved", [root.savedAppsFor(root.selectedWorkspace).length])
@@ -2581,6 +2802,7 @@ ShellUi.BarWidget {
                                 spacing: Style.space(6)
 
                                 Text {
+                                    textFormat: Text.PlainText
                                     text: root.hasSavedLayout(root.selectedWorkspace)
                                         ? root.t("appPresetSummary", [root.savedLayoutSummary(root.selectedWorkspace)])
                                         : root.t("noAppPresetSaved")
@@ -2591,6 +2813,7 @@ ShellUi.BarWidget {
                                 }
 
                                 Text {
+                                    textFormat: Text.PlainText
                                     width: parent.width
                                     text: root.t("removesAnAppFrom")
                                     wrapMode: Text.Wrap
@@ -2634,6 +2857,7 @@ ShellUi.BarWidget {
                                                 spacing: Style.space(4)
 
                                                 Text {
+                                                    textFormat: Text.PlainText
                                                     visible: chipRect.isMissing
                                                     width: Style.space(14)
                                                     anchors.verticalCenter: parent.verticalCenter
@@ -2649,6 +2873,7 @@ ShellUi.BarWidget {
                                                     sourceSize.height: Style.space(14)
                                                     source: root.resolveIcon(chipRect.modelData.icon)
                                                     smooth: true
+                                                    asynchronous: true
                                                 }
 
                                                 Text {
@@ -2672,6 +2897,7 @@ ShellUi.BarWidget {
                                                     color: chipMouse.containsMouse ? Qt.rgba(Commons.Color.foreground.r, Commons.Color.foreground.g, Commons.Color.foreground.b, 0.25) : "transparent"
 
                                                     Text {
+                                                        textFormat: Text.PlainText
                                                         anchors.centerIn: parent
                                                         text: "✕"
                                                         color: Commons.Color.foreground
@@ -2709,6 +2935,7 @@ ShellUi.BarWidget {
                                 }
 
                                 Text {
+                                    textFormat: Text.PlainText
                                     visible: !root.hasSavedLayout(root.selectedWorkspace)
                                     width: parent.width
                                     wrapMode: Text.Wrap
@@ -2741,11 +2968,13 @@ ShellUi.BarWidget {
                                     width: parent.width
                                     spacing: Style.space(4)
                                     Text {
+                                        textFormat: Text.PlainText
                                         text: "⚠️"
                                         font.pixelSize: Style.font.bodySmall
                                         anchors.verticalCenter: parent.verticalCenter
                                     }
                                     Text {
+                                        textFormat: Text.PlainText
                                         text: root.t("existingWindows", [root.restoreConflict ? root.restoreConflict.workspace : ""])
                                         color: Commons.Color.urgent
                                         font.family: Style.font.family
@@ -2756,6 +2985,7 @@ ShellUi.BarWidget {
                                 }
 
                                 Text {
+                                    textFormat: Text.PlainText
                                     width: parent.width
                                     text: root.t("wsHasConflicts", [root.restoreConflict ? root.restoreConflict.conflict_count : 0])
                                     color: Commons.Color.foreground
@@ -2795,6 +3025,7 @@ ShellUi.BarWidget {
                                 }
 
                                 Text {
+                                    textFormat: Text.PlainText
                                     width: parent.width
                                     text: root.t("howWouldYouLike")
                                     color: Commons.Color.foreground
@@ -2945,6 +3176,7 @@ ShellUi.BarWidget {
                 spacing: Style.space(6)
 
                 Text {
+                    textFormat: Text.PlainText
                     text: root.t("defaultWindowLimitAll")
                     color: Commons.Color.foreground
                     opacity: 0.65
@@ -2974,6 +3206,7 @@ ShellUi.BarWidget {
                 }
 
                 Text {
+                    textFormat: Text.PlainText
                     visible: root.cap > 1
                     text: root.t("defaultLayoutPreset")
                     color: Commons.Color.foreground
@@ -3103,6 +3336,7 @@ ShellUi.BarWidget {
                 }
 
                 Text {
+                    textFormat: Text.PlainText
                     text: root.t("presetAppPresetManagement")
                     color: Commons.Color.foreground
                     opacity: 0.65

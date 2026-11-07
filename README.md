@@ -124,6 +124,19 @@ workspace rules, including explicit monitor assignments. Named and special
 workspaces are excluded. The limit counts visible tiled clients, not layout
 slots; tabbed/grouped layouts are deliberately not automatically redistributed.
 
+## Workspace preview
+
+Under the workspace cards the selected workspace is shown large, in your theme's colors:
+
+- **Drag a window** onto one of the layouts in the tray that appears at the bottom to switch to it, or out of the preview for one window fewer. The master window dragged into the other half switches Master Left and Master Right.
+- **The line between windows** sets the split: the master window's share, or the middle column of Columns (snaps to even; double-click for an even split). Splits are kept per workspace and applied after the layout.
+- **+** adds a window: click for one more with the same layout, or drag it onto the preview, where the place you drop picks the layout. **−** removes one; at one window the workspace goes back to the default limit.
+- On an **App Preset**, drag one saved window onto another to swap them (only the saved layout changes).
+- Keys: ←/→ choose a window, Shift+←/→ swap saved ones, ↑/↓ change the layout, `[` and `]` the size, `+` and `−`; Esc cancels a drag.
+- **Undo** (or Ctrl+Z) takes back only the last change made in the preview, and only while nothing else changed those settings since.
+
+The **All Workspaces** card is drawn as a template (stripes and a dashed frame), never like a single workspace. While Theme Manager 2.0 or newer is installed, its Presets page edits these same settings.
+
 ## Presets vs App Presets
 
 Workspace Presets supports two modes for your workspaces:

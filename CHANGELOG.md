@@ -1,5 +1,13 @@
 # Release notes
 
+## 0.7.0 — 2026-11-07
+
+- **Workspace preview** under the workspace cards (as in Theme Manager): the selected workspace's layout, large. Drag a window onto a layout in the tray at the bottom to switch to it, or out of the preview for one window fewer; drag the line between windows to set the split (the master share, the middle column of Columns; snaps, double-click for an even split); the **+** chip adds a window (dropped on the preview, where you drop picks the layout), the **−** chip removes one (at one window: back to the default limit). On an App Preset, drag one saved window onto another to swap them. Keys: ←/→ choose a window, Shift+←/→ swap saved ones, ↑/↓ layout, [ and ] size, + and −; Esc cancels a drag. **Undo** (also Ctrl+Z) takes back only the last change made there.
+- The **All Workspaces** card is drawn as a template (stripes, dashed frame), so it is never mistaken for a single workspace.
+- Split ratios are stored per workspace (`workspaceSplits`, `defaultSplit`) and applied after the layout (`mfact`, `splitratio`); Theme Manager 2.0 edits the same settings while this plugin is on the bar.
+- Helper jobs run one at a time through one queue; a reset clears the splits.
+- Security (release review): a saved command line is never run any more, also not a terminal's: App Presets start apps only from their installed launcher (a terminal reopens as a plain terminal), the command running in a terminal is no longer read from `/proc` or stored, and no command line is built for a browser. `shell.json` is read bounded (2 MiB, a regular file of yours, never blocking) and type-checked at every level; launcher files are regular files read without blocking (4000 at most, 256 KiB each); `hyprctl` output has a size cap and one deadline; notifications are plain text; saved app icons are loaded only from the usual icon folders, asynchronously.
+
 ## 0.6.2 — 2026-11-06
 
 - The Information page (ⓘ) also lists the author's plugins kept in the author's GitHub organization (Maprisma Launcher in `github.com/maprisma`). A cached list from before is read again once. The built-in list (shown offline) has a Maprisma Launcher card too.

@@ -421,12 +421,11 @@ class AppLaunchTests(unittest.TestCase):
         lock.start()
         self.addCleanup(lock.stop)
 
-    def test_launch_standalone_argv(self):
+    def test_a_saved_command_line_is_never_launched(self):
         app = {"argv": ["/opt/bin/my-app", "--flag"]}
         with patch.object(tile.subprocess, "Popen") as popen:
-            self.assertTrue(tile.launch_app(app))
-            popen.assert_called_once()
-            self.assertEqual(popen.call_args[0][0], ["/opt/bin/my-app", "--flag"])
+            self.assertFalse(tile.launch_app(app))          # no launcher: nothing starts
+        popen.assert_not_called()
 
     def test_launch_desktop_with_uwsm(self):
         app = {"desktop_path": "/usr/share/applications/test.desktop"}
@@ -493,17 +492,14 @@ class AppLaunchTests(unittest.TestCase):
 
 
     def test_is_app_available_checks_command_and_desktop(self):
-        # Binary in argv exists
-        with patch.object(tile.shutil, "which", return_value="/usr/bin/python3"):
-            avail, reason = tile.is_app_available({"argv": ["python3"]})
-            self.assertTrue(avail)
-            self.assertEqual(reason, "ok")
-
-        # Missing binary in argv
-        with patch.object(tile.shutil, "which", return_value=None):
-            avail, reason = tile.is_app_available({"argv": ["nonexistent_xyz_app"]})
+        # A saved command line alone never makes an app available (only a launcher does).
+        with patch.object(tile.shutil, "which", return_value="/usr/bin/python3"), \
+                patch.object(tile, "get_desktop_directories", return_value=[]):
+            app = {"argv": ["python3"]}
+            avail, reason = tile.is_app_available(app)
             self.assertFalse(avail)
-            self.assertEqual(reason, "command_not_found")
+            self.assertEqual(reason, "no_launcher")
+            self.assertNotIn("argv", app)
 
         # Missing desktop file
         avail, reason = tile.is_app_available({"desktop_path": "/nonexistent/path.desktop"})
@@ -999,6 +995,97 @@ class ShellConfigTests(unittest.TestCase):
                 self.assertEqual(tile.main(["--clear-all-app-presets"]), 0)
             self.assertEqual(json.loads(out.call_args_list[0].args[0])["status"], "ok")
 
+
+class SplitTests(unittest.TestCase):
+    """The split set in the panel's preview (or Theme Manager's), 2026-11-07."""
+
+    def lua(self, preset, clients, settings):
+        with patch.object(tile, "hypr", return_value=json.dumps(clients)) as mock_hypr, \
+                patch.object(tile, "read_settings", return_value=settings):
+            tile.apply_layout_preset(1, preset, dry_run=False)
+        return [call.args[1] for call in mock_hypr.call_args_list if len(call.args) > 1]
+
+    def test_split_is_sent_after_the_layout(self):
+        c1 = {"workspace": {"id": 1}, "mapped": True, "at": [0, 0]}
+        c2 = {"workspace": {"id": 1}, "mapped": True, "at": [960, 0]}
+        c3 = {"workspace": {"id": 1}, "mapped": True, "at": [960, 500]}
+        own = {"workspace_splits": {1: 0.6}, "default_split": 0.4}
+        self.assertIn('hl.dispatch(hl.dsp.layout("mfact exact 0.60"))', self.lua("master-right", [c1, c2, c3], own))
+        self.assertIn('hl.dispatch(hl.dsp.layout("splitratio 0.80 exact"))',
+                      self.lua("side-by-side", [c1, c2], {"default_split": 0.4}))
+        self.assertIn('hl.dispatch(hl.dsp.layout("mfact exact 0.50"))', self.lua("master-left", [c1, c2, c3], {}))   # none stored = even
+        self.assertFalse(any("mfact" in l or "splitratio" in l for l in self.lua("grid", [c1, c2, c3], own)))
+        three = {"cap": 3, "workspace_splits": {1: 0.75}}
+        self.assertIn('hl.dispatch(hl.dsp.layout("mfact exact 0.60"))', self.lua("columns", [c1, c2, c3], three))
+        self.assertFalse(any("mfact" in l for l in self.lua("columns", [c1, c2], three)))
+
+    def test_read_settings_takes_only_valid_splits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            shell = Path(tmp) / "omarchy/shell.json"
+            shell.parent.mkdir(parents=True)
+            shell.write_text(json.dumps({"bar": {"layout": {"left": [{
+                "id": tile.PLUGIN_ID, "workspaceSplits": {"1": 0.62, "2": 0.95, "x": 0.5, "3": "0.4"},
+                "defaultSplit": 0.3}]}}}))
+            with patch.dict(os.environ, {"XDG_CONFIG_HOME": tmp}):
+                settings = tile.read_settings()
+        self.assertEqual(settings["workspace_splits"], {1: 0.62})
+        self.assertEqual(settings["default_split"], 0.3)
+
+
+class AllWorkspacesJobTests(unittest.TestCase):
+    """A queued "all workspaces" job leaves App Presets saved meanwhile alone (2026-11-07)."""
+
+    def test_reset_and_remove_all_skip_app_preset_workspaces(self):
+        settings = {"cap": 2, "default_auto_presets": {}, "workspace_modes": {2: "manual", 3: "auto"},
+                    "workspace_layouts": {3: {"mode": "manual"}, 4: {"mode": "manual"}}}
+        workspaces = json.dumps([{"id": i} for i in (1, 2, 3, 4)])
+        for job in (tile.reset_all_presets, tile.remove_all_presets):
+            with patch.object(tile, "read_settings", return_value=settings), \
+                    patch.object(tile, "hypr", return_value=workspaces), \
+                    patch.object(tile, "apply_layout_preset") as apply:
+                job(dry_run=True)
+            self.assertEqual([c.args[0] for c in apply.call_args_list], [1, 3])   # 2 and 4 use their App Preset
+
+
+
+class HostileInputTests(unittest.TestCase):
+    """0.7.0 release review: hyprctl output, notifications, shell.json."""
+
+    def test_bounded_run_caps_bytes_and_time(self):
+        import subprocess
+        import sys
+        self.assertEqual(tile.bounded_run([sys.executable, "-c", "print('ok')"]), "ok\n")
+        with self.assertRaises(subprocess.CalledProcessError):
+            tile.bounded_run([sys.executable, "-c", "import sys\nwhile True: sys.stdout.write('x'*65536)"],
+                             timeout=10, max_bytes=1024 * 1024)
+        with self.assertRaises(subprocess.TimeoutExpired):
+            tile.bounded_run([sys.executable, "-c", "import time; time.sleep(30)"], timeout=0.5)
+
+    def test_notifications_carry_no_markup(self):
+        sent = []
+        with patch.object(tile.shutil, "which", return_value="/usr/bin/notify-send"), \
+                patch.object(tile.subprocess, "Popen", side_effect=lambda argv, **k: sent.append(argv)):
+            tile.send_notification("T", "Moved (<img src='http://x/y.png'>\nA&B)")
+        self.assertFalse(any(c in sent[0][-1] for c in "<&\n"))
+
+    def test_shell_json_is_read_bounded_and_type_checked(self):
+        import os
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "shell.json"
+            path.write_text('{"bar": {"layout": {"right": [7, "x", {"id": "%s", "maxWindows": 3}]}}}' % tile.PLUGIN_ID)
+            entries = list(tile.plugin_entries(tile.load_shell_config(path)))
+            self.assertEqual(entries[0]["maxWindows"], 3)
+            for config in ({"bar": "x"}, {"bar": {"layout": []}}, {"bar": {"layout": {"left": "x"}}}, []):
+                self.assertEqual(list(tile.plugin_entries(config)), [])
+            path.write_bytes(b" " * (tile.SHELL_JSON_MAX + 1))
+            with self.assertRaises(ValueError):
+                tile.load_shell_config(path)
+            fifo = Path(tmp) / "fifo.json"
+            os.mkfifo(fifo)
+            with self.assertRaises(ValueError):
+                tile.load_shell_config(fifo)                     # refused, never blocks
 
 if __name__ == "__main__":
     unittest.main()

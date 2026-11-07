@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
-import configparser
 from contextlib import contextmanager
 import fcntl
 import hashlib
@@ -21,7 +20,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-import shlex
 import stat
 import subprocess
 import sys
@@ -103,66 +101,156 @@ def plan_move(clients, workspaces, address, cap, workspace_caps=None, workspace_
     return {"address": address, "source": source, "target": target} if target else None
 
 
-def read_settings():
-    path = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "omarchy/shell.json"
-    with path.open() as stream:
-        config = json.load(stream)
-    entries = config.get("bar", {}).get("layout", {})
+SHELL_JSON_MAX = 2 * 1024 * 1024
+
+
+def shell_json_path():
+    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "omarchy/shell.json"
+
+
+def load_shell_config(path=None):
+    """shell.json as data: a regular file of this user (a dotfiles link is
+    followed to it), opened without blocking, at most SHELL_JSON_MAX bytes."""
+    path = (path or shell_json_path()).resolve()
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_size > SHELL_JSON_MAX:
+            raise ValueError("unsafe shell.json")
+        data = os.read(fd, SHELL_JSON_MAX + 1)
+        while len(data) <= SHELL_JSON_MAX:
+            more = os.read(fd, SHELL_JSON_MAX + 1 - len(data))
+            if not more:
+                break
+            data += more
+    finally:
+        os.close(fd)
+    if len(data) > SHELL_JSON_MAX:
+        raise ValueError("shell.json too large")
+    return json.loads(data)
+
+
+def plugin_entries(config):
+    """This plugin's bar entries; every level of shell.json is type-checked."""
+    bar = config.get("bar") if isinstance(config, dict) else None
+    layout = bar.get("layout") if isinstance(bar, dict) else None
+    if not isinstance(layout, dict):
+        return
     for section in ("left", "center", "right"):
-        for entry in entries.get(section, []):
-            if entry.get("id") == PLUGIN_ID:
-                cap = entry.get("maxWindows", 2)
-                if type(cap) is not int or not 1 <= cap <= 4:
-                    cap = 2
-                raw_caps = entry.get("workspaceCaps", {})
-                workspace_caps = {}
-                if isinstance(raw_caps, dict):
-                    for k, v in raw_caps.items():
-                        ws_id = int(k) if type(k) is int or (isinstance(k, str) and k.isdigit()) else None
-                        if ws_id is not None and ws_id > 0 and type(v) is int and 1 <= v <= 4:
-                            workspace_caps[ws_id] = v
-                raw_modes = entry.get("workspaceModes", {})
-                workspace_modes = {}
-                if isinstance(raw_modes, dict):
-                    for k, v in raw_modes.items():
-                        ws_id = int(k) if type(k) is int or (isinstance(k, str) and k.isdigit()) else None
-                        if ws_id is not None and ws_id > 0 and v in ("auto", "manual"):
-                            workspace_modes[ws_id] = v
-                raw_layouts = entry.get("workspaceLayouts", {})
-                workspace_layouts = {}
-                if isinstance(raw_layouts, dict):
-                    for k, v in raw_layouts.items():
-                        ws_id = int(k) if type(k) is int or (isinstance(k, str) and k.isdigit()) else None
-                        if ws_id is not None and ws_id > 0 and isinstance(v, dict):
-                            workspace_layouts[ws_id] = v
-                raw_auto_presets = entry.get("workspaceAutoPresets", {})
-                workspace_auto_presets = {}
-                if isinstance(raw_auto_presets, dict):
-                    for k, v in raw_auto_presets.items():
-                        ws_id = int(k) if type(k) is int or (isinstance(k, str) and k.isdigit()) else None
-                        if ws_id is not None and ws_id > 0 and isinstance(v, str):
-                            workspace_auto_presets[ws_id] = v
-                raw_default_presets = entry.get("defaultAutoPresets", {})
-                default_auto_presets = {}
-                if isinstance(raw_default_presets, dict):
-                    for k, v in raw_default_presets.items():
-                        if str(k) in ("2", "3", "4") and isinstance(v, str):
-                            default_auto_presets[str(k)] = v
-                return {"enabled": entry.get("active", True) is True,
-                        "cap": cap, "workspace_caps": workspace_caps,
-                        "workspace_modes": workspace_modes,
-                        "workspace_layouts": workspace_layouts,
-                        "workspace_auto_presets": workspace_auto_presets,
-                        "default_auto_presets": default_auto_presets}
+        entries = layout.get(section)
+        for entry in entries if isinstance(entries, list) else []:
+            if isinstance(entry, dict) and entry.get("id") == PLUGIN_ID:
+                yield entry
+
+
+def read_settings():
+    config = load_shell_config()
+    for entry in plugin_entries(config):
+        cap = entry.get("maxWindows", 2)
+        if type(cap) is not int or not 1 <= cap <= 4:
+            cap = 2
+        raw_caps = entry.get("workspaceCaps", {})
+        workspace_caps = {}
+        if isinstance(raw_caps, dict):
+            for k, v in raw_caps.items():
+                ws_id = int(k) if type(k) is int or (isinstance(k, str) and k.isdigit()) else None
+                if ws_id is not None and ws_id > 0 and type(v) is int and 1 <= v <= 4:
+                    workspace_caps[ws_id] = v
+        raw_modes = entry.get("workspaceModes", {})
+        workspace_modes = {}
+        if isinstance(raw_modes, dict):
+            for k, v in raw_modes.items():
+                ws_id = int(k) if type(k) is int or (isinstance(k, str) and k.isdigit()) else None
+                if ws_id is not None and ws_id > 0 and v in ("auto", "manual"):
+                    workspace_modes[ws_id] = v
+        raw_layouts = entry.get("workspaceLayouts", {})
+        workspace_layouts = {}
+        if isinstance(raw_layouts, dict):
+            for k, v in raw_layouts.items():
+                ws_id = int(k) if type(k) is int or (isinstance(k, str) and k.isdigit()) else None
+                if ws_id is not None and ws_id > 0 and isinstance(v, dict):
+                    workspace_layouts[ws_id] = v
+        raw_auto_presets = entry.get("workspaceAutoPresets", {})
+        workspace_auto_presets = {}
+        if isinstance(raw_auto_presets, dict):
+            for k, v in raw_auto_presets.items():
+                ws_id = int(k) if type(k) is int or (isinstance(k, str) and k.isdigit()) else None
+                if ws_id is not None and ws_id > 0 and isinstance(v, str):
+                    workspace_auto_presets[ws_id] = v
+        # The split dragged in the panel's preview (or Theme Manager's):
+        # 0.2-0.8 per workspace, and a default.
+        raw_splits = entry.get("workspaceSplits", {})
+        workspace_splits = {}
+        if isinstance(raw_splits, dict):
+            for k, v in raw_splits.items():
+                ws_id = int(k) if type(k) is int or (isinstance(k, str) and k.isdigit()) else None
+                if ws_id is not None and ws_id > 0 and _clean_split(v) is not None:
+                    workspace_splits[ws_id] = _clean_split(v)
+        raw_default_presets = entry.get("defaultAutoPresets", {})
+        default_auto_presets = {}
+        if isinstance(raw_default_presets, dict):
+            for k, v in raw_default_presets.items():
+                if str(k) in ("2", "3", "4") and isinstance(v, str):
+                    default_auto_presets[str(k)] = v
+        return {"enabled": entry.get("active", True) is True,
+                "cap": cap, "workspace_caps": workspace_caps,
+                "workspace_modes": workspace_modes,
+                "workspace_layouts": workspace_layouts,
+                "workspace_auto_presets": workspace_auto_presets,
+                "default_auto_presets": default_auto_presets,
+                "workspace_splits": workspace_splits,
+                "default_split": _clean_split(entry.get("defaultSplit"))}
     return {"enabled": False, "cap": 2, "workspace_caps": {},
             "workspace_modes": {}, "workspace_layouts": {},
-            "workspace_auto_presets": {}, "default_auto_presets": {}}
+            "workspace_auto_presets": {}, "default_auto_presets": {},
+            "workspace_splits": {}, "default_split": None}
+
+
+def _clean_split(value):
+    """A split share 0.2-0.8, or None (even, Hyprland's own)."""
+    return round(float(value), 2) if type(value) in (int, float) and 0.2 <= value <= 0.8 else None
+
+
+HYPR_OUTPUT_MAX = 8 * 1024 * 1024     # window titles come from apps and pages: never unbounded
+
+
+def bounded_run(argv, timeout=3.0, max_bytes=HYPR_OUTPUT_MAX) -> str:
+    """stdout of argv (no shell) with a hard byte cap and one deadline. Raises
+    TimeoutExpired, CalledProcessError (also when the cap is exceeded) or OSError."""
+    import selectors
+    process = subprocess.Popen(list(argv), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                               stderr=subprocess.DEVNULL)
+    chunks, size, deadline = [], 0, time.monotonic() + timeout
+    try:
+        with selectors.DefaultSelector() as selector:
+            selector.register(process.stdout, selectors.EVENT_READ)
+            while True:
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    raise subprocess.TimeoutExpired(argv, timeout)
+                if not selector.select(left):
+                    continue
+                chunk = os.read(process.stdout.fileno(), 65536)
+                if not chunk:
+                    break
+                size += len(chunk)
+                if size > max_bytes:
+                    raise subprocess.CalledProcessError(-1, argv)
+                chunks.append(chunk)
+        process.wait(timeout=max(0.1, deadline - time.monotonic()))
+    except BaseException:
+        process.kill()
+        process.wait()
+        raise
+    finally:
+        process.stdout.close()
+    if process.returncode != 0:
+        raise subprocess.CalledProcessError(process.returncode, argv)
+    return b"".join(chunks).decode("utf-8", "replace")
 
 
 def hypr(*args):
-    result = subprocess.run(["hyprctl", *args], capture_output=True,
-                            text=True, timeout=3, check=True)
-    return result.stdout
+    return bounded_run(["hyprctl", *args])
 
 
 def move_expression(address, target, follow):
@@ -257,16 +345,47 @@ def get_desktop_directories():
     return [d for d in candidates if d.is_dir()]
 
 
+DESKTOP_FILE_MAX = 256 * 1024     # a launcher file larger than this is skipped
+DESKTOP_FILES_MAX = 4000          # and no more than this many are read
+
+
+def read_launcher(path):
+    """A launcher's text, or None. It may be a link (Flatpak exports are) but must lead to a
+    regular file of at most DESKTOP_FILE_MAX bytes; opened without blocking and checked again on
+    the open file, so a FIFO or device (also swapped in after the first check) is never read."""
+    try:
+        if not stat.S_ISREG(os.stat(path).st_mode):
+            return None
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+    except OSError:
+        return None
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > DESKTOP_FILE_MAX:
+            return None
+        data = os.read(fd, DESKTOP_FILE_MAX + 1)
+        return None if len(data) > DESKTOP_FILE_MAX else data.decode("utf-8", errors="ignore")
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
+
+
 def parse_desktop_files():
     apps, seen_ids = [], set()
     for directory in get_desktop_directories():
         for path in directory.glob("*.desktop"):
             if path.name in seen_ids:
                 continue
+            if len(seen_ids) >= DESKTOP_FILES_MAX:
+                return apps
             seen_ids.add(path.name)
             values, section = {}, None
+            text = read_launcher(path)
+            if text is None:
+                continue
             try:
-                for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+                for raw in text.splitlines():
                     line = raw.strip()
                     if line.startswith("[") and line.endswith("]"):
                         section = line.strip("[]")
@@ -318,161 +437,13 @@ def installed_launcher(app, desktop_apps=None):
     return ""
 
 
-TERMINAL_BINS = {"foot", "footclient", "alacritty", "kitty", "ghostty", "wezterm-gui", "xterm", "gnome-terminal-server"}
-
-
-def same_mount_namespace(pid):
-    """True only for a process in this session's own mount namespace. A sandboxed app (Flatpak,
-    bubblewrap, a container) has its own: what it says about itself (cmdline, children) is never
-    turned into a command."""
-    try:
-        return os.stat(f"/proc/{int(pid)}/ns/mnt").st_ino == os.stat("/proc/self/ns/mnt").st_ino
-    except (OSError, ValueError, TypeError):
-        return False
-
-
-def host_terminal(pid):
-    """The window's process is a terminal emulator installed on the host (its real executable, in
-    this namespace), not a window that only calls itself one through its class."""
-    if not same_mount_namespace(pid):
-        return False
-    try:
-        exe = Path(os.readlink(f"/proc/{int(pid)}/exe"))
-    except (OSError, ValueError):
-        return False
-    return exe.name.casefold() in TERMINAL_BINS and exe.is_absolute() and str(exe).startswith("/usr/")
-
-
-def get_terminal_active_command(pid, terminal_cls):
-    """If the window is a terminal emulator, find the foreground/active command inside it."""
-    shells = {"sh", "bash", "zsh", "fish", "dash", "csh", "tcsh", "login", "init", "systemd"}
-    terminal_bins = TERMINAL_BINS
-
-    def get_children(p):
-        children = []
-        try:
-            cf = Path(f"/proc/{p}/task/{p}/children")
-            if cf.exists():
-                children = [int(x) for x in cf.read_text().split()]
-        except Exception:
-            pass
-        if not children:
-            try:
-                for proc in Path("/proc").iterdir():
-                    if proc.name.isdigit():
-                        try:
-                            stat = (proc / "stat").read_text()
-                            ppid = int(stat.split(")")[1].split()[1])
-                            if ppid == p:
-                                children.append(int(proc.name))
-                        except Exception:
-                            pass
-            except Exception:
-                pass
-        return children
-
-    queue = get_children(pid)
-    candidate_proc = None
-
-    while queue:
-        curr = queue.pop(0)
-        try:
-            exe_name = Path(os.readlink(f"/proc/{curr}/exe")).name.casefold()
-        except Exception:
-            try:
-                exe_name = Path(f"/proc/{curr}/comm").read_text().strip().casefold()
-            except Exception:
-                exe_name = ""
-
-        if exe_name and exe_name not in shells and exe_name not in terminal_bins and same_mount_namespace(curr):
-            candidate_proc = (curr, exe_name)
-        queue.extend(get_children(curr))
-
-    if not candidate_proc:
-        return None
-
-    cpid, cname = candidate_proc
-    try:
-        raw = Path(f"/proc/{cpid}/cmdline").read_bytes()
-        cmdline = [part.decode("utf-8", errors="ignore") for part in raw.split(b"\0") if part]
-    except Exception:
-        cmdline = [cname]
-
-    try:
-        exe_path = str(Path(os.readlink(f"/proc/{cpid}/exe")).resolve())
-        if cmdline and not shutil.which(cmdline[0]) and Path(exe_path).is_file():
-            cmdline[0] = exe_path
-    except Exception:
-        pass
-
-    try:
-        cwd = str(Path(f"/proc/{cpid}/cwd").resolve())
-    except Exception:
-        cwd = ""
-
-    t_cls = terminal_cls.lower()
-    t_bin = shutil.which(t_cls) or shutil.which("foot") or "foot"
-
-    if "foot" in t_cls:
-        argv = [t_bin]
-        if cwd and Path(cwd).is_dir():
-            argv.extend(["-D", cwd])
-        argv.extend(cmdline)
-    elif "alacritty" in t_cls:
-        argv = [t_bin]
-        if cwd and Path(cwd).is_dir():
-            argv.extend(["--working-directory", cwd])
-        argv.extend(["-e", *cmdline])
-    elif "kitty" in t_cls:
-        argv = [t_bin]
-        if cwd and Path(cwd).is_dir():
-            argv.extend(["--directory", cwd])
-        argv.extend(cmdline)
-    elif "ghostty" in t_cls:
-        argv = [t_bin]
-        if cwd and Path(cwd).is_dir():
-            argv.extend(["--working-directory", cwd])
-        argv.extend(["-e", *cmdline])
-    else:
-        argv = [t_bin, *cmdline]
-
-    return {
-        "name": cname.capitalize(),
-        "command": cname,
-        "argv": argv,
-        "argv_source": "terminal",
-        "cwd": cwd,
-        "icon": "utilities-terminal",
-    }
-
-
 def resolve_app_for_client(client, desktop_apps):
     cls = client.get("class", "").strip()
     icls = client.get("initialClass", "").strip()
     pid = client.get("pid", 0)
 
-    # 0. Check if this is a terminal running a specific CLI tool (e.g. codex, nvim)
-    terminal_classes = {"foot", "footclient", "alacritty", "kitty", "ghostty", "wezterm", "xterm", "gnome-terminal"}
-    if pid and any(t in cls.lower() for t in terminal_classes) and host_terminal(pid):
-        active_cmd = get_terminal_active_command(pid, cls)
-        if active_cmd:
-            cmd_name = active_cmd["command"]
-            icon = "utilities-terminal"
-            for d in desktop_apps:
-                if d.get("desktop_id", "").casefold() == cmd_name or d.get("name", "").casefold() == cmd_name:
-                    if d.get("icon"):
-                        icon = d.get("icon")
-                    break
-            return {
-                "name": active_cmd["name"],
-                "class": cls,
-                "desktop_id": cmd_name if valid_desktop_id(cmd_name) else "",
-                "desktop_path": "",
-                "icon": icon,
-                "argv": active_cmd["argv"],
-                "argv_source": "terminal",
-                "cwd": active_cmd["cwd"],
-            }
+    # A terminal window is saved as its terminal's own launcher (1–3 below): the
+    # command running in it is never read from /proc, stored or started again.
 
     # 1. Match StartupWMClass
     for app in desktop_apps:
@@ -492,11 +463,13 @@ def resolve_app_for_client(client, desktop_apps):
         did = app.get("desktop_id", "").casefold()
         name = app.get("name", "").casefold()
         exec_cmd = app.get("exec", "").casefold()
-        if (did and did in cls_lower) or (name and name in cls_lower):
+        # A launcher's ID or name inside the class counts only when it is a real word (at least
+        # 4 characters): a "Name=R" launcher must not claim every window with an "r" in its class.
+        if (len(did) >= 4 and did in cls_lower) or (len(name) >= 4 and name in cls_lower):
             return app
         if "omarchy-launch-webapp" in exec_cmd:
             url_part = exec_cmd.split()[-1].replace("https://", "").replace("http://", "").split("/")[0]
-            if url_part and (url_part in cls_lower or cls_lower in url_part):
+            if len(url_part) >= 4 and len(cls_lower) >= 4 and (url_part in cls_lower or cls_lower in url_part):
                 return app
 
     # 3. Match /proc/<pid>/exe
@@ -619,43 +592,23 @@ def capture_workspace(ws_id):
 
 
 def trusted_argv(app):
-    """A saved command that may be run: only a terminal's foreground command, captured from a host
-    terminal (argv_source "terminal", the terminal emulator first). Commands saved by older
-    versions from a window's own /proc cmdline are never run: their app starts from its launcher
-    instead, or not at all."""
-    argv = app.get("argv")
-    if app.get("argv_source") != "terminal" or not isinstance(argv, list) or not argv \
-            or not all(isinstance(a, str) for a in argv):
-        return []
-    return list(argv) if Path(argv[0]).name.casefold() in TERMINAL_BINS else []
+    """A saved command line is never run (0.7.0, marketplace review): the
+    shell.json entry it comes from can be edited by anyone who can write that
+    file, and a label such as argv_source "terminal" proves nothing. Every
+    saved app starts from an installed launcher instead, a terminal as a
+    plain terminal."""
+    return []
 
 
 def restorable(app):
-    """The saved app as it may be started: its argv kept only when trusted_argv allows it."""
-    argv = trusted_argv(app)
-    kept = {k: v for k, v in app.items() if k != "argv"}
-    return dict(kept, argv=argv) if argv else kept
+    """The saved app as it may be started: never with a saved command line."""
+    return {k: v for k, v in app.items() if k != "argv"}
 
 
 def is_app_available(app):
-    """Check if an app can be executed or located on the system."""
-    if "argv" in app and app["argv"]:
-        argv = app["argv"]
-        if len(argv) == 1 and " " in argv[0]:
-            import shlex
-            try:
-                argv = shlex.split(argv[0])
-                app["argv"] = argv
-            except Exception:
-                pass
-        cmd = argv[0]
-        if shutil.which(cmd):
-            return True, "ok"
-        path = Path(cmd)
-        if path.is_file() and os.access(path, os.X_OK):
-            return True, "ok"
-        return False, "command_not_found"
-
+    """Whether an app can be started: only through an installed launcher (a saved
+    command line is never used, see restorable)."""
+    app.pop("argv", None)
     # Only an installed launcher starts the app (installed_launcher), never a saved path or ID.
     desktop_path = app.get("desktop_path", "")
     launcher = installed_launcher(app) if desktop_path or app.get("desktop_id") else ""
@@ -670,8 +623,17 @@ def is_app_available(app):
     return False, "no_launcher"
 
 
+def plain(text, limit=300) -> str:
+    """No markup and no control characters: notification daemons render markup,
+    and window classes come from the apps themselves."""
+    text = "".join(" " if ord(ch) < 32 or ord(ch) == 127 else ch for ch in str(text))
+    text = text.replace("&", "+").replace("<", "‹").replace(">", "›")
+    return text[:limit]
+
+
 def send_notification(title, body, urgency="normal"):
-    """Send a desktop notification via notify-send if available."""
+    """Send a desktop notification via notify-send if available (plain text only)."""
+    title, body = plain(title, 120), plain(body, 300)
     if shutil.which("notify-send"):
         try:
             subprocess.Popen(
@@ -716,62 +678,10 @@ def _clean_env():
     return env
 
 
-def app_for_restore(app, saved):
-    """Request a real browser window for each missing normal Chrome slot."""
-    browser_classes = {"google-chrome", "google-chrome-stable", "chromium", "chromium-browser"}
-    classes = {str(saved.get(k, "")).casefold() for k in ("class", "initialClass")}
-    if not classes & browser_classes:
-        return app  # Chrome web apps keep their own desktop launcher.
-    argv = list(app.get("argv") or [])
-    try:
-        if argv and len(argv) == 1 and " " in argv[0]:
-            argv = shlex.split(argv[0])
-        if not argv:
-            # Read the installed launcher, never execute a saved raw Exec string.
-            desktop = configparser.ConfigParser(interpolation=None, strict=False)
-            desktop.read(app.get("desktop_path") or "", encoding="utf-8")
-            argv = shlex.split(desktop.get("Desktop Entry", "Exec"))
-            argv = [arg for arg in argv if arg not in ("%U", "%u", "%F", "%f")]
-            if any("%" in arg for arg in argv):
-                return app
-    except (OSError, ValueError, configparser.Error):
-        return app
-    if not argv or any(arg.startswith(("--app=", "--app-id=")) for arg in argv):
-        return app
-    if "--new-window" not in argv:
-        argv.insert(1, "--new-window")
-    return dict(app, argv=argv)
-
-
 def launch_app(app):
-    """Launch an application following approved security guidelines.
-
-    1. Direct argv for standalone binaries (never through a shell).
-    2. uwsm-app for desktop files (in app-graphical.slice).
-    3. GioUnix.DesktopAppInfo fallback for desktop files.
-    Never executes arbitrary shell strings.
-    """
-    if "argv" in app and app["argv"]:
-        argv = app["argv"]
-        if len(argv) == 1 and " " in argv[0]:
-            import shlex
-            try:
-                argv = shlex.split(argv[0])
-                app["argv"] = argv
-            except Exception:
-                pass
-        try:
-            subprocess.Popen(
-                argv,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-                env=_clean_env(),
-            )
-            return True
-        except OSError:
-            return False
-
+    """Start a saved app only from its installed launcher: uwsm-app with the
+    .desktop file (in app-graphical.slice), Gio as the fallback. Never a saved
+    command line, never a shell string."""
     desktop_path = app.get("desktop_path", "")
     # Second check where it is started: only an installed launcher's own file (is_app_available
     # put it there), so no other path can hand uwsm-app or Gio a file from elsewhere.
@@ -1130,7 +1040,7 @@ def _restore_workspace(ws_id, dry_run=False, conflict_action="ask"):
                 before = {c.get("address") for c in json.loads(hypr("clients", "-j"))}
                 focus_changed = True
                 hypr("eval", 'hl.dispatch(hl.dsp.focus({workspace=%d}))' % ws_id)
-                if not launch_app(app_for_restore(app, saved)):
+                if not launch_app(app):
                     failed.append({"name": name, "reason": "launch_failed"})
                     continue
                 client = wait_for_window(saved, before)
@@ -1223,7 +1133,7 @@ def read_mode_file(path, key):
     """The quoted value of key in one of Omarchy's saved mode files, or None.
     Only small regular files are read, never through a symlink."""
     try:
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
     except OSError:
         return None
     try:
@@ -1293,7 +1203,8 @@ def set_omarchy_mode(ws_id, mode, dry_run=False):
             raise
     for target in ("omarchy.workspaces", "omarchy.dock"):
         try:
-            subprocess.run(["omarchy-shell", "-q", target, "refresh"], capture_output=True, timeout=3)
+            subprocess.run(["omarchy-shell", "-q", target, "refresh"], stdin=subprocess.DEVNULL,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
         except (OSError, subprocess.SubprocessError):
             pass
     # Titlebars come from a Hyprland plugin that only loads while the config
@@ -1430,8 +1341,10 @@ def apply_layout_preset(ws_id, preset, dry_run=False, sync_mode=True):
     try:
         settings = read_settings()
         ws_cap = settings.get("workspace_caps", {}).get(ws_id, settings.get("cap", 2))
+        split = settings.get("workspace_splits", {}).get(ws_id, settings.get("default_split"))
     except Exception:
-        ws_cap = 2
+        ws_cap, split = 2, None
+    split = _clean_split(split)
 
     # 1. Configure workspace rule for this workspace
     if preset == "none":
@@ -1526,6 +1439,19 @@ def apply_layout_preset(ws_id, preset, dry_run=False, sync_mode=True):
                 actions.append(("eval", 'hl.dispatch(hl.dsp.layout("orientationright"))'))
             elif preset == "grid":
                 actions.append(("eval", f'hl.workspace_rule({{ workspace = "{ws_id}", layout = "dwindle" }})'))
+
+        # The split from the preview: the master's share, the left/top window's
+        # (dwindle's ratio 1 = even, so twice the share), or with Columns of
+        # exactly 3 windows (a centred master) the middle column's.
+        # No split stored means even (as the preview draws it): sent too, so
+        # "Even split" also takes back a size dragged earlier.
+        if preset in ("master-left", "master-right") and len(ws_clients) >= 2:
+            actions.append(("eval", 'hl.dispatch(hl.dsp.layout("mfact exact %.2f"))' % (split if split is not None else 0.5)))
+        elif preset in ("side-by-side", "stacked") and len(ws_clients) == 2:
+            actions.append(("eval", 'hl.dispatch(hl.dsp.layout("splitratio %.2f exact"))' % (2 * (split if split is not None else 0.5))))
+        elif preset == "columns" and ws_cap == 3 and len(ws_clients) == 3:
+            # Columns with 3 windows is a centred master: its share is the middle column's.
+            actions.append(("eval", 'hl.dispatch(hl.dsp.layout("mfact exact %.2f"))' % (min(split, 0.6) if split is not None else 0.33)))
 
         if need_focus_switch:
             actions.append(("eval", f'hl.dispatch(hl.dsp.focus({{ workspace = {original_ws} }}))'))
@@ -1699,6 +1625,21 @@ def sync_modes(start=False, dry_run=False):
             "modes": {str(ws): mode for ws, mode in modes.items()}}
 
 
+def app_preset_workspaces():
+    """Workspaces using their App Preset right now (read when a job runs: a
+    job queued before an App Preset was saved must leave it alone)."""
+    try:
+        settings = read_settings()
+    except Exception:
+        return set()
+    modes = settings.get("workspace_modes", {})
+    layouts = settings.get("workspace_layouts", {})
+    manual = {ws for ws, mode in modes.items() if mode == "manual"}
+    manual |= {ws for ws, layout in layouts.items()
+               if isinstance(layout, dict) and layout.get("mode") == "manual" and ws not in modes}
+    return manual
+
+
 def remove_all_presets(dry_run=False):
     try:
         workspaces = json.loads(hypr("workspaces", "-j"))
@@ -1708,6 +1649,8 @@ def remove_all_presets(dry_run=False):
     if not ws_ids:
         ws_ids = list(range(1, 11))
     for wid in ws_ids:
+        if wid in app_preset_workspaces():     # checked right before each one
+            continue
         try:
             apply_layout_preset(wid, "none", dry_run=dry_run)
         except Exception:
@@ -1730,6 +1673,8 @@ def reset_all_presets(dry_run=False):
     if not ws_ids:
         ws_ids = list(range(1, 11))
     for wid in ws_ids:
+        if wid in app_preset_workspaces():     # checked right before each one
+            continue
         try:
             apply_layout_preset(wid, default_preset, dry_run=dry_run)
         except Exception:
@@ -1759,46 +1704,40 @@ def write_shell_config(path, config):
 def clear_app_preset(ws_id):
     if type(ws_id) is not int or ws_id <= 0:
         raise ValueError("invalid workspace id")
-    path = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "omarchy/shell.json"
+    path = shell_json_path()
     if not path.exists():
         return {"status": "error", "message": "shell.json not found"}
     with runtime_lock():
-        with path.open("r", encoding="utf-8") as f:
-            config = json.load(f)
+        config = load_shell_config(path)
         found = False
-        for section in ("left", "center", "right"):
-            for entry in config.get("bar", {}).get("layout", {}).get(section, []):
-                if entry.get("id") == PLUGIN_ID:
-                    layouts = entry.get("workspaceLayouts", {})
-                    if str(ws_id) in layouts:
-                        del layouts[str(ws_id)]
-                        found = True
-                    modes = entry.get("workspaceModes", {})
-                    if str(ws_id) in modes:
-                        del modes[str(ws_id)]
-                        found = True
+        for entry in plugin_entries(config):
+            layouts = entry.get("workspaceLayouts")
+            if isinstance(layouts, dict) and str(ws_id) in layouts:
+                del layouts[str(ws_id)]
+                found = True
+            modes = entry.get("workspaceModes")
+            if isinstance(modes, dict) and str(ws_id) in modes:
+                del modes[str(ws_id)]
+                found = True
         if found:
             write_shell_config(path, config)
         return {"status": "ok", "workspace": ws_id, "cleared": found}
 
 
 def clear_all_app_presets():
-    path = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "omarchy/shell.json"
+    path = shell_json_path()
     if not path.exists():
         return {"status": "error", "message": "shell.json not found"}
     with runtime_lock():
-        with path.open("r", encoding="utf-8") as f:
-            config = json.load(f)
+        config = load_shell_config(path)
         found = False
-        for section in ("left", "center", "right"):
-            for entry in config.get("bar", {}).get("layout", {}).get(section, []):
-                if entry.get("id") == PLUGIN_ID:
-                    if entry.get("workspaceLayouts"):
-                        entry["workspaceLayouts"] = {}
-                        found = True
-                    if entry.get("workspaceModes"):
-                        entry["workspaceModes"] = {k: v for k, v in entry["workspaceModes"].items() if v != "manual"}
-                        found = True
+        for entry in plugin_entries(config):
+            if entry.get("workspaceLayouts"):
+                entry["workspaceLayouts"] = {}
+                found = True
+            if isinstance(entry.get("workspaceModes"), dict) and entry["workspaceModes"]:
+                entry["workspaceModes"] = {k: v for k, v in entry["workspaceModes"].items() if v != "manual"}
+                found = True
         if found:
             write_shell_config(path, config)
         return {"status": "ok", "cleared": "all"}

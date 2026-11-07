@@ -126,6 +126,7 @@ Item {
       }
 
       Text {
+        textFormat: Text.PlainText
         id: chevron
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
