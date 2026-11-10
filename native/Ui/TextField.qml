@@ -53,6 +53,6 @@ TextField {
   background: BorderSurface {
     color: Style.controlFill(root._focused, root._hot, root.foreground, root.accent)
     borderSpec: root._borderSpec
-    radius: Style.cornerRadius
+    radius: Style.controlRadius
   }
 }

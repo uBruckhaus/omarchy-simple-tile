@@ -36,6 +36,11 @@ Item {
     property var t: function(key, args) { return key }
     property var presetLabel: function(p) { return p }
     property var presetForCap: function(cap) { return "side-by-side" }
+    // Corners (the panel's Corners setting, qml/corners.js sizes): the preview is a card
+    // (radius), its windows and tray slots swatches (small), its badge and tag pills (pill).
+    property real radius: 8
+    property real small: 4
+    property real pill: 999
 
     signal addRequested(int ws, string preset)        // "" = a click: the layout it follows
     signal removeRequested(int ws)                    // − : one fewer, or the default limit
@@ -77,6 +82,9 @@ Item {
     onBgChanged: canvas.requestPaint()
     onAccentChanged: canvas.requestPaint()
     onAllLabelChanged: canvas.requestPaint()
+    onRadiusChanged: canvas.requestPaint()
+    onSmallChanged: canvas.requestPaint()
+    onPillChanged: canvas.requestPaint()
     onShownRectsChanged: if (highlight !== null && highlight >= shownRects.length) highlight = shownRects.length ? shownRects.length - 1 : null
     onActiveFocusChanged: { if (activeFocus && highlight === null) highlight = 0; if (!activeFocus) highlight = null; canvas.requestPaint() }
 
@@ -426,7 +434,7 @@ Item {
             var ctx = getContext("2d")
             var W = width, H = height, K = preview.k()
             ctx.reset()
-            rounded(ctx, 0, 0, W, H, 8)
+            rounded(ctx, 0, 0, W, H, preview.radius)
             ctx.clip()
             ctx.fillStyle = rgba(preview.bg, 1); ctx.fillRect(0, 0, W, H)
             if (preview.allLabel) {
@@ -452,7 +460,7 @@ Item {
             for (var j = 0; j < list.length; j++) {
                 var r = list[j]
                 var rx = r[0] * W, ry = top + r[1] * area, rw = r[2] * W, rh = r[3] * area
-                rounded(ctx, rx, ry, rw, rh, 4 * K)
+                rounded(ctx, rx, ry, rw, rh, preview.small * K)
                 if (preview.shownDashed || j === preview.source) {
                     ctx.fillStyle = rgba(preview.bg, 0.55); ctx.fill()
                     dash(ctx, true); ctx.strokeStyle = rgba(preview.fg, 0.6); ctx.lineWidth = 1.2 * K; ctx.stroke(); dash(ctx, false)
@@ -462,7 +470,7 @@ Item {
                 ctx.strokeStyle = rgba(j === 0 ? preview.accent : preview.fg, j === 0 ? 0.95 : 0.35)
                 ctx.lineWidth = (j === 0 ? 2 : 1.2) * K; ctx.stroke()
                 if (j === preview.highlight) {
-                    rounded(ctx, rx + 3 * K, ry + 3 * K, rw - 6 * K, rh - 6 * K, 3 * K)
+                    rounded(ctx, rx + 3 * K, ry + 3 * K, rw - 6 * K, rh - 6 * K, Math.min(preview.small, 3) * K)
                     ctx.fillStyle = rgba(preview.accent, 0.25); ctx.fill()
                     dash(ctx, true); ctx.strokeStyle = rgba(preview.accent, 1); ctx.lineWidth = 2 * K; ctx.stroke(); dash(ctx, false)
                 }
@@ -478,7 +486,7 @@ Item {
                 }
             }
             if (preview.drop) {
-                rounded(ctx, 2, 2, W - 4, H - 4, 8)
+                rounded(ctx, 2, 2, W - 4, H - 4, Math.max(0, preview.radius - 2))
                 if (ctx.setLineDash) ctx.setLineDash([8, 5])
                 ctx.strokeStyle = rgba(preview.accent, 1); ctx.lineWidth = 3; ctx.stroke(); dash(ctx, false)
             }
@@ -515,14 +523,14 @@ Item {
             }
             if (preview.edgeHover && !preview.edgeLit && !preview.tray.length && !preview.plusHot) {
                 ctx.fillStyle = rgba(preview.fg, 0.55)
-                rounded(ctx, W - 6, top + area * 0.3, 3, area * 0.4, 1.5); ctx.fill()
+                rounded(ctx, W - 6, top + area * 0.3, 3, area * 0.4, Math.min(preview.small, 1.5)); ctx.fill()
             }
             if (preview.edgeLit) { ctx.fillStyle = rgba(preview.accent, 0.9); ctx.fillRect(W - 6, top, 4, H - top - 4) }
             if (preview.badge) {
                 ctx.font = "bold " + Math.max(11, Math.round(12 * K)) + "px sans-serif"
                 var tw = ctx.measureText(preview.badge).width, padB = 8 * K, bh = Math.max(11, 12 * K) + 2 * padB * 0.8
                 var bw = tw + 2 * padB, bx = (W - bw) / 2, by = top + 8 * K
-                rounded(ctx, bx, by, bw, bh, bh / 2)
+                rounded(ctx, bx, by, bw, bh, Math.min(preview.pill, bh / 2))
                 ctx.fillStyle = rgba(preview.bg, 0.92); ctx.fill()
                 ctx.strokeStyle = rgba(preview.accent, 1); ctx.lineWidth = 1.5; ctx.stroke()
                 ctx.fillStyle = rgba(preview.fg, 1); ctx.textBaseline = "middle"
@@ -530,25 +538,27 @@ Item {
             }
             if (preview.allLabel && !preview.tray.length) {
                 // A dashed accent frame and a tag: the defaults for every workspace.
-                rounded(ctx, 2, 2, W - 4, H - 4, 8)
+                rounded(ctx, 2, 2, W - 4, H - 4, Math.max(0, preview.radius - 2))
                 if (ctx.setLineDash) ctx.setLineDash([7 * K, 4 * K])
                 ctx.strokeStyle = rgba(preview.accent, 0.9); ctx.lineWidth = 2 * K; ctx.stroke(); dash(ctx, false)
                 ctx.font = "bold " + Math.max(10, Math.round(10 * K)) + "px sans-serif"
                 var tagPad = 6 * K, tagW = ctx.measureText(preview.allLabel).width + 2 * tagPad, tagH = Math.max(10, 10 * K) + 1.4 * tagPad
                 var tagX = W - tagW - 8 * K, tagY = bar + 4 * K
-                rounded(ctx, tagX, tagY, tagW, tagH, tagH / 2)
+                rounded(ctx, tagX, tagY, tagW, tagH, Math.min(preview.pill, tagH / 2))
                 ctx.fillStyle = rgba(preview.accent, 1); ctx.fill()
                 ctx.fillStyle = rgba(preview.bg, 1); ctx.textBaseline = "middle"
                 ctx.fillText(preview.allLabel, tagX + tagPad, tagY + tagH / 2)
             }
             if (preview.activeFocus && !preview.tray.length) {
-                rounded(ctx, 1.5, 1.5, W - 3, H - 3, 8)
+                rounded(ctx, 1.5, 1.5, W - 3, H - 3, Math.max(0, preview.radius - 1.5))
                 ctx.strokeStyle = rgba(preview.accent, 0.8); ctx.lineWidth = 2; ctx.stroke()
             }
         }
 
         function drawPlus(ctx, cx, cy, r, alpha, hot, minus) {
-            ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI)
+            // Round handles, square ones when the Corners setting is Square (pill 0).
+            if (preview.pill > 0) { ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI) }
+            else rounded(ctx, cx - r, cy - r, 2 * r, 2 * r, 0)
             ctx.fillStyle = rgba(hot ? preview.accent : preview.bg, (hot ? 0.95 : 0.9) * alpha); ctx.fill()
             ctx.strokeStyle = rgba(preview.accent, alpha); ctx.lineWidth = 1.5; ctx.stroke()
             var arm = r * 0.5
@@ -559,11 +569,11 @@ Item {
         }
 
         function drawTray(ctx, W, H, K) {
-            rounded(ctx, 1.5, 1.5, W - 3, H - 3, 8)
+            rounded(ctx, 1.5, 1.5, W - 3, H - 3, Math.max(0, preview.radius - 1.5))
             if (ctx.setLineDash) ctx.setLineDash([6, 4])
             ctx.strokeStyle = rgba(preview.fg, 0.45); ctx.lineWidth = 1.5; ctx.stroke(); dash(ctx, false)
             var band = H * preview.trayShare, pill = preview.trayPill()
-            rounded(ctx, pill.x, pill.y, pill.w, pill.h, 6 * K)
+            rounded(ctx, pill.x, pill.y, pill.w, pill.h, Math.min(preview.radius, 6) * K)
             ctx.fillStyle = rgba(preview.bg, 0.93); ctx.fill()
             ctx.strokeStyle = rgba(preview.fg, 0.25); ctx.lineWidth = 1; ctx.stroke()
             ctx.font = Math.max(10, Math.round(band * 0.13)) + "px sans-serif"
@@ -571,7 +581,7 @@ Item {
             var boxes = preview.trayBoxes()
             for (var i = 0; i < preview.tray.length; i++) {
                 var target = preview.tray[i], b = boxes[i], hot = i === preview.trayHot
-                rounded(ctx, b.x, b.y, b.w, b.h, 3 * K)
+                rounded(ctx, b.x, b.y, b.w, b.h, Math.min(preview.small, 3) * K)
                 ctx.fillStyle = rgba(hot ? preview.accent : preview.fg, hot ? 0.22 : 0.08); ctx.fill()
                 if (!hot && !target.current) dash(ctx, true)
                 ctx.strokeStyle = rgba(hot || target.current ? preview.accent : preview.fg, hot ? 1 : target.current ? 0.8 : 0.35)
@@ -581,7 +591,7 @@ Item {
                 for (var s = 0; s < shapes.length; s++) {
                     var q = shapes[s]
                     rounded(ctx, b.x + inset + q[0] * (b.w - 2 * inset), b.y + inset + q[1] * (b.h - 2 * inset),
-                            q[2] * (b.w - 2 * inset), q[3] * (b.h - 2 * inset), 1.5 * K)
+                            q[2] * (b.w - 2 * inset), q[3] * (b.h - 2 * inset), Math.min(preview.small, 1.5) * K)
                     ctx.fill()
                 }
                 var label = (target.current ? "✓ " : "") + (target.fewer ? preview.t("pvOneFewer") : preview.presetLabel(target.preset))

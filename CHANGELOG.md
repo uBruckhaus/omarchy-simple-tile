@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.8.0 — 2026-11-10
+
+- **F12** (no modifier) saves a picture of the panel to `~/Pictures/Workspace Presets` (a private folder, new `0600` files) and asks what is wrong; the note goes next to it as `.txt`. Only the panel is drawn into the picture (Qt's `grabToImage`), nothing is sent anywhere. Switch it off on the settings page (**F12 saves a screenshot**).
+- **Corners** setting: *Like windows* (Hyprland's rounding, the default), *Slightly rounded (6 px)*, *Rounded (12 px)* or *Square*, for the whole panel: frame, cards, buttons, drop-downs, switches, badges and the workspace preview. Both settings live in the widget's `shell.json` entry.
+- The vendored controls (`native/`) take their corners from that setting (`Style.cornerRadius`, `controlRadius`, `smallRadius`); before, the snapshot was always square. Shared parts (`PanelShot.qml`, `shot_save.py`, `corners.js`, `KeyTextField.qml`, `MorePlugins.qml`) from the author's plugin kit; `I18n.js` rebuilt.
+
 ## 0.7.0 — 2026-11-07
 
 - **Workspace preview** under the workspace cards (as in Theme Manager): the selected workspace's layout, large. Drag a window onto a layout in the tray at the bottom to switch to it, or out of the preview for one window fewer; drag the line between windows to set the split (the master share, the middle column of Columns; snaps, double-click for an even split); the **+** chip adds a window (dropped on the preview, where you drop picks the layout), the **−** chip removes one (at one window: back to the default limit). On an App Preset, drag one saved window onto another to swap them. Keys: ←/→ choose a window, Shift+←/→ swap saved ones, ↑/↓ layout, [ and ] size, + and −; Esc cancels a drag. **Undo** (also Ctrl+Z) takes back only the last change made there.

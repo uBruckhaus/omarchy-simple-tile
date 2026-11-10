@@ -11,6 +11,7 @@ import qs.Ui as ShellUi
 import "LayoutState.js" as LayoutState
 import "PreviewLogic.js" as PreviewLogic
 import "I18n.js" as I18n
+import "corners.js" as Corners
 
 ShellUi.BarWidget {
     id: root
@@ -125,6 +126,29 @@ ShellUi.BarWidget {
         if (saveSettingsEntry(entry)) settings = entry
     }
     onShowSettingsViewChanged: { panelScroll.contentY = 0; content.forceActiveFocus() }
+
+    // Corners of the panel, its cards and controls, and the F12 screenshot key (settings
+    // page); both live in this widget's shell.json entry like the language, the defaults as
+    // no key. "Like windows" is Hyprland's rounding as the shell reads it (Theme.Style).
+    // radius: frame, cards, pop-ups, tool tips; control: buttons, drop-downs, chips;
+    // small: tracks, badges, swatches; pill: round dots, or square ones in Square.
+    readonly property string cornersSetting: Corners.choice(String(setting("corners", "windows")))
+    readonly property var corners: Corners.sizes(cornersSetting, Theme.Style.cornerRadius)
+    readonly property bool screenshotKey: setting("screenshotKey", true) !== false
+    readonly property real settingsLabelWidth: Style.space(130)
+    // The window tiles inside the workspace cards' mini screens.
+    readonly property real miniRadius: Math.min(corners.small, 2)
+    function saveDefaulted(key, value, fallback) {
+        var entry = Object.assign({}, settings, {id: moduleName})
+        if (value === fallback) delete entry[key]
+        else entry[key] = value
+        if (saveSettingsEntry(entry)) settings = entry
+    }
+    function setCorners(code) { saveDefaulted("corners", Corners.choice(code), "windows") }
+    function setScreenshotKey(on) { saveDefaulted("screenshotKey", on === true, true) }
+    // The vendored controls (native/Ui) take their corners from native/Commons/Style:
+    // cornerRadius here, controlRadius and smallRadius derived from it.
+    Binding { target: Style; property: "cornerRadius"; value: root.corners.radius }
 
     Component.onCompleted: {
         Qt.callLater(function() {
@@ -1572,7 +1596,25 @@ ShellUi.BarWidget {
         open: root.opened
         focusTarget: content
         contentWidth: popup.fittedContentWidth(Style.space(420))
-        contentHeight: popup.fittedContentHeight(content.implicitHeight)
+        // At least as tall as the screenshot note overlay while it shows.
+        contentHeight: popup.fittedContentHeight(Math.max(content.implicitHeight, shot.neededHeight))
+
+        // F12: a screenshot of this panel into ~/Pictures/Workspace Presets, then an optional
+        // note (PanelShot.qml, shared). The keys the panel's own handlers leave alone (F12 has
+        // no handler here) come up to it; while its overlay shows they are off.
+        PanelShot {
+            id: shot
+            anchors.fill: parent
+            pluginId: "ubruckhaus.simple-tile"
+            folderName: "Workspace Presets"
+            active: root.screenshotKey
+            panelOpen: root.opened
+            returnFocus: content
+            lang: root.lang
+            fg: Commons.Color.foreground
+            dim: Qt.rgba(Commons.Color.foreground.r, Commons.Color.foreground.g, Commons.Color.foreground.b, 0.65)
+            fontFamily: Style.font.family
+            corners: root.corners
 
         Flickable {
             id: panelScroll
@@ -1586,6 +1628,8 @@ ShellUi.BarWidget {
             id: content
             width: parent.width
             spacing: Style.space(12)
+            // Off while the screenshot note overlay shows: typing there must reach its field.
+            Keys.enabled: !shot.overlayOpen
             // Esc and Backspace leave the settings page first.
             Keys.onEscapePressed: { if (workspacePreview.cancelDrag()) return; if (root.showSettingsView || root.showInfoView) { root.showSettingsView = false; root.showInfoView = false } else root.close() }
             Keys.onPressed: function(event) {
@@ -1671,7 +1715,7 @@ ShellUi.BarWidget {
                 visible: root.activeHintTitle !== "" && root.rightClickHintsEnabled
                 width: parent.width
                 implicitHeight: hintCol.implicitHeight + Style.space(16)
-                radius: Style.space(6)
+                radius: root.corners.radius
                 color: Qt.rgba(Commons.Color.accent.r, Commons.Color.accent.g, Commons.Color.accent.b, 0.12)
                 border.width: 1
                 border.color: Commons.Color.accent
@@ -1775,6 +1819,8 @@ ShellUi.BarWidget {
                     // The panel is narrow: one more line before an explanation is cut.
                     textLines: 4
                     nameLines: 2
+                    cardRadius: root.corners.radius
+                    tileRadius: root.corners.control
                     lang: root.lang
                     fg: Commons.Color.foreground
                     fontFamily: Style.font.family
@@ -1806,7 +1852,7 @@ ShellUi.BarWidget {
 
                 Row {
                     spacing: Style.space(10)
-                    Text { id: languageLabel; textFormat: Text.PlainText; width: Style.space(90); text: root.t("language"); color: Commons.Color.foreground; opacity: 0.8; font.family: Style.font.family; font.pixelSize: Style.font.caption; anchors.verticalCenter: parent.verticalCenter }
+                    Text { id: languageLabel; textFormat: Text.PlainText; width: root.settingsLabelWidth; wrapMode: Text.WordWrap; text: root.t("language"); color: Commons.Color.foreground; opacity: 0.8; font.family: Style.font.family; font.pixelSize: Style.font.caption; anchors.verticalCenter: parent.verticalCenter }
                     CompactDropdown {
                         id: languagePicker
                         anchors.verticalCenter: parent.verticalCenter
@@ -1816,6 +1862,8 @@ ShellUi.BarWidget {
                         fontSize: Style.font.caption
                         rowHeight: languageLabel.implicitHeight + Style.space(6)
                         popupRowHeight: languageLabel.implicitHeight + Style.space(8)
+                        controlRadius: root.corners.control
+                        popupRadius: root.corners.radius
                         options: [{ value: "auto", label: root.t("systemLanguage", [I18n.languageName(root.systemLang)]) }]
                             .concat(I18n.LANGUAGES.map(function(l) { return { value: l.code, label: l.name } }))
                         value: root.languageSetting
@@ -1825,6 +1873,55 @@ ShellUi.BarWidget {
                             languagePicker.value = Qt.binding(function() { return root.languageSetting })
                         }
                     }
+                }
+
+                // Corners of the panel, its cards and controls; "Like windows" is Hyprland's rounding.
+                Column {
+                    width: parent.width
+                    spacing: Style.space(4)
+                    Row {
+                        spacing: Style.space(10)
+                        Text { id: cornersLabel; textFormat: Text.PlainText; width: root.settingsLabelWidth; wrapMode: Text.WordWrap; text: root.t("corners"); color: Commons.Color.foreground; opacity: 0.8; font.family: Style.font.family; font.pixelSize: Style.font.caption; anchors.verticalCenter: parent.verticalCenter }
+                        CompactDropdown {
+                            id: cornersPicker
+                            anchors.verticalCenter: parent.verticalCenter
+                            showLabel: false
+                            width: fitWidth
+                            fontSize: Style.font.caption
+                            rowHeight: cornersLabel.implicitHeight + Style.space(6)
+                            popupRowHeight: cornersLabel.implicitHeight + Style.space(8)
+                            controlRadius: root.corners.control
+                            popupRadius: root.corners.radius
+                            options: Corners.options(root.t, Theme.Style.cornerRadius)
+                            value: root.cornersSetting
+                            onChanged: function(picked) {
+                                root.setCorners(picked)
+                                cornersPicker.value = Qt.binding(function() { return root.cornersSetting })
+                            }
+                        }
+                    }
+                    Text { x: root.settingsLabelWidth + Style.space(10); width: parent.width - x; textFormat: Text.PlainText; text: root.t("cornersHint"); wrapMode: Text.WordWrap; color: Commons.Color.foreground; opacity: 0.65; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                }
+
+                // F12 saves a screenshot of this panel (PanelShot.qml); on by default.
+                Column {
+                    width: parent.width
+                    spacing: Style.space(4)
+                    Item {
+                        width: parent.width
+                        height: Math.max(shotLabel.implicitHeight, shotToggle.implicitHeight)
+                        Text { id: shotLabel; textFormat: Text.PlainText; width: root.settingsLabelWidth; wrapMode: Text.WordWrap; text: root.t("shotKey"); color: Commons.Color.foreground; opacity: 0.8; font.family: Style.font.family; font.pixelSize: Style.font.caption; anchors.verticalCenter: parent.verticalCenter }
+                        Ui.ToggleSwitch {
+                            id: shotToggle
+                            x: root.settingsLabelWidth + Style.space(10)
+                            anchors.verticalCenter: parent.verticalCenter
+                            cursorRing: false
+                            rounded: root.corners.pill > 0
+                            checked: root.screenshotKey
+                            onToggled: root.setScreenshotKey(!root.screenshotKey)
+                        }
+                    }
+                    Text { x: root.settingsLabelWidth + Style.space(10); width: parent.width - x; textFormat: Text.PlainText; text: root.t("shotKeyHint", ["Workspace Presets"]); wrapMode: Text.WordWrap; color: Commons.Color.foreground; opacity: 0.65; font.family: Style.font.family; font.pixelSize: Style.font.caption }
                 }
 
                 Ui.Toggle {
@@ -2023,7 +2120,7 @@ ShellUi.BarWidget {
                                     Rectangle {
                                         width: Style.space(5)
                                         height: Style.space(5)
-                                        radius: width / 2
+                                        radius: Math.min(root.corners.pill, width / 2)
                                         color: Commons.Color.accent
                                         visible: wsCard.modelData === root.currentWsId
                                         anchors.verticalCenter: parent.verticalCenter
@@ -2069,7 +2166,7 @@ ShellUi.BarWidget {
                                     anchors.centerIn: parent
                                     width: Style.space(56)
                                     height: Style.space(36)
-                                    radius: 3
+                                    radius: Math.min(root.corners.small, 3)
                                     color: "#121217"
                                     border.width: 1
                                     border.color: "#2c2d38"
@@ -2095,7 +2192,7 @@ ShellUi.BarWidget {
                                                 y: Math.round(normY * parent.height) + 1
                                                 width: Math.max(6, Math.round(normW * parent.width) - 2)
                                                 height: Math.max(6, Math.round(normH * parent.height) - 2)
-                                                radius: 2
+                                                radius: root.miniRadius
                                                 color: Commons.Color.accentContainer || "#262b3d"
                                                 border.width: 1
                                                 border.color: Commons.Color.accent
@@ -2149,7 +2246,7 @@ ShellUi.BarWidget {
                                         Rectangle {
                                             anchors.fill: parent
                                             visible: parent.capVal === 1 && parent.preset !== "none" && parent.preset !== "floating" && parent.preset !== "scrolling"
-                                            radius: 2
+                                            radius: root.miniRadius
                                             color: Commons.Color.accentContainer || "#262b3d"
                                             border.width: 1
                                             border.color: Commons.Color.accent
@@ -2165,7 +2262,7 @@ ShellUi.BarWidget {
                                             Rectangle {
                                                 width: (parent.width - 2) / 2
                                                 height: parent.height
-                                                radius: 2
+                                                radius: root.miniRadius
                                                 color: Commons.Color.accentContainer || "#262b3d"
                                                 border.width: 1
                                                 border.color: Commons.Color.accent
@@ -2175,7 +2272,7 @@ ShellUi.BarWidget {
                                             Rectangle {
                                                 width: (parent.width - 2) / 2
                                                 height: parent.height
-                                                radius: 2
+                                                radius: root.miniRadius
                                                 color: Commons.Color.accentContainer || "#262b3d"
                                                 border.width: 1
                                                 border.color: Commons.Color.accent
@@ -2192,7 +2289,7 @@ ShellUi.BarWidget {
                                             Rectangle {
                                                 width: parent.width
                                                 height: (parent.height - 2) / 2
-                                                radius: 2
+                                                radius: root.miniRadius
                                                 color: Commons.Color.accentContainer || "#262b3d"
                                                 border.width: 1
                                                 border.color: Commons.Color.accent
@@ -2202,7 +2299,7 @@ ShellUi.BarWidget {
                                             Rectangle {
                                                 width: parent.width
                                                 height: (parent.height - 2) / 2
-                                                radius: 2
+                                                radius: root.miniRadius
                                                 color: Commons.Color.accentContainer || "#262b3d"
                                                 border.width: 1
                                                 border.color: Commons.Color.accent
@@ -2221,7 +2318,7 @@ ShellUi.BarWidget {
                                                 Rectangle {
                                                     width: (parent.width - 4) / 3
                                                     height: parent.height
-                                                    radius: 2
+                                                    radius: root.miniRadius
                                                     color: Commons.Color.accentContainer || "#262b3d"
                                                     border.width: 1
                                                     border.color: Commons.Color.accent
@@ -2239,7 +2336,7 @@ ShellUi.BarWidget {
                                             Rectangle {
                                                 width: (parent.width - 2) / 2
                                                 height: parent.height
-                                                radius: 2
+                                                radius: root.miniRadius
                                                 color: Commons.Color.accentContainer || "#262b3d"
                                                 border.width: 1
                                                 border.color: Commons.Color.accent
@@ -2253,7 +2350,7 @@ ShellUi.BarWidget {
                                                 Rectangle {
                                                     width: parent.width
                                                     height: (parent.height - 2) / 2
-                                                    radius: 2
+                                                    radius: root.miniRadius
                                                     color: Commons.Color.accentContainer || "#262b3d"
                                                     border.width: 1
                                                     border.color: Commons.Color.accent
@@ -2263,7 +2360,7 @@ ShellUi.BarWidget {
                                                 Rectangle {
                                                     width: parent.width
                                                     height: (parent.height - 2) / 2
-                                                    radius: 2
+                                                    radius: root.miniRadius
                                                     color: Commons.Color.accentContainer || "#262b3d"
                                                     border.width: 1
                                                     border.color: Commons.Color.accent
@@ -2285,7 +2382,7 @@ ShellUi.BarWidget {
                                                 Rectangle {
                                                     width: parent.width
                                                     height: (parent.height - 2) / 2
-                                                    radius: 2
+                                                    radius: root.miniRadius
                                                     color: Commons.Color.accentContainer || "#262b3d"
                                                     border.width: 1
                                                     border.color: Commons.Color.accent
@@ -2295,7 +2392,7 @@ ShellUi.BarWidget {
                                                 Rectangle {
                                                     width: parent.width
                                                     height: (parent.height - 2) / 2
-                                                    radius: 2
+                                                    radius: root.miniRadius
                                                     color: Commons.Color.accentContainer || "#262b3d"
                                                     border.width: 1
                                                     border.color: Commons.Color.accent
@@ -2306,7 +2403,7 @@ ShellUi.BarWidget {
                                             Rectangle {
                                                 width: (parent.width - 2) / 2
                                                 height: parent.height
-                                                radius: 2
+                                                radius: root.miniRadius
                                                 color: Commons.Color.accentContainer || "#262b3d"
                                                 border.width: 1
                                                 border.color: Commons.Color.accent
@@ -2325,7 +2422,7 @@ ShellUi.BarWidget {
                                                 Rectangle {
                                                     width: (parent.width - 6) / 4
                                                     height: parent.height
-                                                    radius: 2
+                                                    radius: root.miniRadius
                                                     color: Commons.Color.accentContainer || "#262b3d"
                                                     border.width: 1
                                                     border.color: Commons.Color.accent
@@ -2346,7 +2443,7 @@ ShellUi.BarWidget {
                                                 Rectangle {
                                                     width: (parent.width - 2) / 2
                                                     height: (parent.height - 2) / 2
-                                                    radius: 2
+                                                    radius: root.miniRadius
                                                     color: Commons.Color.accentContainer || "#262b3d"
                                                     border.width: 1
                                                     border.color: Commons.Color.accent
@@ -2367,7 +2464,7 @@ ShellUi.BarWidget {
                                                     y: index * parent.height * 0.3
                                                     width: parent.width * 0.7
                                                     height: parent.height * 0.7
-                                                    radius: 2
+                                                    radius: root.miniRadius
                                                     color: Commons.Color.accentContainer || "#262b3d"
                                                     border.width: 1
                                                     border.color: Commons.Color.accent
@@ -2388,7 +2485,7 @@ ShellUi.BarWidget {
                                                     x: index * parent.width * 0.42
                                                     width: parent.width * 0.38
                                                     height: parent.height
-                                                    radius: 2
+                                                    radius: root.miniRadius
                                                     color: Commons.Color.accentContainer || "#262b3d"
                                                     border.width: 1
                                                     border.color: Commons.Color.accent
@@ -2402,7 +2499,7 @@ ShellUi.BarWidget {
                                         Rectangle {
                                             anchors.fill: parent
                                             visible: parent.preset === "none"
-                                            radius: 2
+                                            radius: root.miniRadius
                                             color: "transparent"
                                             border.width: 1
                                             border.color: "#686873"
@@ -2429,6 +2526,9 @@ ShellUi.BarWidget {
             WorkspacePreview {
                 id: workspacePreview
                 width: parent.width
+                radius: root.corners.radius
+                small: root.corners.small
+                pill: root.corners.pill
                 readonly property var entry: Object.assign({}, root.settings)
                 readonly property var savedList: PreviewLogic.savedWindows(entry, ws)
                 ws: root.selectedWorkspace
@@ -2648,7 +2748,7 @@ ShellUi.BarWidget {
                             visible: root.hasSavedLayout(root.selectedWorkspace)
                             width: parent.width
                             implicitHeight: appPresetBannerRow.implicitHeight + Style.space(8)
-                            radius: Style.space(4)
+                            radius: root.corners.radius
                             color: Qt.rgba(Commons.Color.accent.r, Commons.Color.accent.g, Commons.Color.accent.b, 0.12)
                             border.width: 1
                             border.color: Commons.Color.accent
@@ -2850,7 +2950,7 @@ ShellUi.BarWidget {
                         Rectangle {
                             width: parent.width
                             implicitHeight: snapshotCol.implicitHeight + Style.space(16)
-                            radius: Style.space(6)
+                            radius: root.corners.radius
                             color: Qt.rgba(Commons.Color.foreground.r, Commons.Color.foreground.g, Commons.Color.foreground.b, 0.05)
                             border.width: 1
                             border.color: Qt.rgba(Commons.Color.foreground.r, Commons.Color.foreground.g, Commons.Color.foreground.b, 0.15)
@@ -2900,7 +3000,7 @@ ShellUi.BarWidget {
                                             height: Style.space(24)
                                             readonly property real fixedWidth: Style.space(isMissing ? 72 : 54)
                                             width: Math.min(appChips.width, chipName.implicitWidth + fixedWidth)
-                                            radius: Style.space(4)
+                                            radius: root.corners.control
                                             readonly property bool isMissing: root.isAppFailed(root.selectedWorkspace, modelData)
                                             color: isMissing
                                                 ? Qt.rgba(Commons.Color.urgent.r, Commons.Color.urgent.g, Commons.Color.urgent.b, 0.15)
@@ -2953,7 +3053,7 @@ ShellUi.BarWidget {
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     width: Style.space(20)
                                                     height: Style.space(20)
-                                                    radius: width / 2
+                                                    radius: Math.min(root.corners.pill, width / 2)
                                                     color: chipMouse.containsMouse ? Qt.rgba(Commons.Color.foreground.r, Commons.Color.foreground.g, Commons.Color.foreground.b, 0.25) : "transparent"
 
                                                     Text {
@@ -3013,7 +3113,7 @@ ShellUi.BarWidget {
                             visible: root.restoreConflict && root.restoreConflict.workspace === root.selectedWorkspace
                             width: parent.width
                             implicitHeight: conflictCol.implicitHeight + Style.space(16)
-                            radius: Style.space(6)
+                            radius: root.corners.radius
                             color: Qt.rgba(Commons.Color.urgent.r, Commons.Color.urgent.g, Commons.Color.urgent.b, 0.1)
                             border.width: 1
                             border.color: Commons.Color.urgent
@@ -3065,7 +3165,7 @@ ShellUi.BarWidget {
                                             required property var modelData
                                             height: Style.space(20)
                                             width: Math.min(conflictCol.width, conflictTxt.implicitWidth + Style.space(12))
-                                            radius: Style.space(3)
+                                            radius: root.corners.small
                                             color: Qt.rgba(Commons.Color.foreground.r, Commons.Color.foreground.g, Commons.Color.foreground.b, 0.1)
                                             border.width: 1
                                             border.color: Qt.rgba(Commons.Color.foreground.r, Commons.Color.foreground.g, Commons.Color.foreground.b, 0.2)
@@ -3469,5 +3569,6 @@ ShellUi.BarWidget {
 
         }
         }
+        } // end PanelShot
     }
 }
