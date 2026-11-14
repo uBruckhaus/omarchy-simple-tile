@@ -1588,6 +1588,9 @@ ShellUi.BarWidget {
         }
     }
 
+    // See-through with the window style (Theme Manager → Settings).
+    PopupGlass { inside: shot; active: popup.open }
+
     Ui.KeyboardPanel {
         id: popup
         anchorItem: button
