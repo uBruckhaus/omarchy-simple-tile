@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.9.3 — 2026-11-16
+
+- Security (marketplace review #14100): the queue of newly opened windows waiting for the tiling helper is bounded. Addresses are normalized and kept once, a closed window leaves the queue (`closewindow`), at most 32 wait (the oldest is dropped), and a stream of events no longer postpones the drain (the 150 ms timer is started, not restarted). Logic in `WindowQueue.js`, tests in `tests/test_window_queue.js`.
+
 ## 0.8.0 — 2026-11-10
 
 - **F12** (no modifier) saves a picture of the panel to `~/Pictures/Workspace Presets` (a private folder, new `0600` files) and asks what is wrong; the note goes next to it as `.txt`. Only the panel is drawn into the picture (Qt's `grabToImage`), nothing is sent anywhere. Switch it off on the settings page (**F12 saves a screenshot**).

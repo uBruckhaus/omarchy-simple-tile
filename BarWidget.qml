@@ -10,6 +10,7 @@ import "native/Ui" as Ui
 import qs.Ui as ShellUi
 import "LayoutState.js" as LayoutState
 import "PreviewLogic.js" as PreviewLogic
+import "WindowQueue.js" as WindowQueue
 import "I18n.js" as I18n
 import "corners.js" as Corners
 
@@ -1101,7 +1102,7 @@ ShellUi.BarWidget {
         var queue = pending.slice()
         var address = queue.shift()
         pending = queue
-        worker.command = ["python3", root.helperScriptPath(), "--window", address]
+        worker.command = ["python3", root.helperScriptPath(), "--window", "0x" + address]
         worker.running = true
     }
 
@@ -1109,11 +1110,15 @@ ShellUi.BarWidget {
         target: Hyprland
         function onRawEvent(event) {
             if (event.name === "configreloaded") { root.syncOmarchyModes(false); return }
+            if (event.name === "closewindow") {
+                root.pending = WindowQueue.remove(root.pending, String(event.data).split(",")[0])
+                return
+            }
             if (event.name !== "openwindow" || !root.tilingActive) return
-            var address = event.data.split(",")[0]
-            if (!/^(0x)?[0-9a-fA-F]+$/.test(address)) return
-            root.pending = root.pending.concat([address])
-            settle.restart()
+            var before = root.pending
+            root.pending = WindowQueue.enqueue(before, String(event.data).split(",")[0])
+            // start, not restart: a stream of events must not postpone the drain forever
+            if (root.pending !== before && !settle.running && !worker.running) settle.start()
         }
     }
     Timer { id: settle; interval: 150; onTriggered: root.nextWindow() }
